@@ -9,12 +9,13 @@ Portability :  portable
 
 A simple implementation of the R-Tree predicate. A containment predicate is a tuple of two points
 representing a rectangle with the first tuple (minx,maxy) being the upper left corner of the rectangle
-and the second (maxx,miny) being the lower right corner of the rectangle, while the equality predicate 
+and the second (maxx,miny) being the lower right corner of the rectangle, while the equality predicate
 is simply a 2D point (tuple of two integers).
 -}
 
 
 {-# LANGUAGE MultiParamTypeClasses
+    , TypeFamilies
     , FlexibleInstances
     #-}
 
@@ -40,7 +41,8 @@ overlaps ((minx1,maxy1),(maxx1,miny1)) ((minx2,maxy2),(maxx2,miny2)) =  (minx1 <
 
 -- | More documentation on the instance implementation in the source
 instance Predicates Predicate (Int,Int) where
-    
+
+    type Penalty (Int,Int)= Int
     -- | Two containment predicates are consistent if the rectangles they represent overlap.
     -- A containment and equality predicate are consistent if the point represented by the latter
     -- is in the area described by former.
@@ -49,16 +51,16 @@ instance Predicates Predicate (Int,Int) where
     consistent (Equals (x,y)) (NodeEntry (_, Contains ((minx,maxy),(maxx,miny)))) = between x minx maxx && between y miny maxy
     consistent (Contains ((minx,maxy),(maxx,miny))) (LeafEntry (_, Equals (x,y))) = between x minx maxx && between y miny maxy
     consistent (Equals a1) (LeafEntry (_, Equals a2))           = a1 == a2
-    
+
     -- | A union of predicates is a rectangle with the minimal x und maximal y coordinate of all predicates as the upper left corner
-    -- and the maximal x and minimal y coordinate of all predicates as the lower right corner  
+    -- and the maximal x and minimal y coordinate of all predicates as the lower right corner
     union ps = Contains ((minx,maxy),(maxx,miny))
                 -- The minimum of all x interval minimums
         where   minx    = minimum $ map minxP ps
                 -- The maximum of all y interval maximums
                 maxy    = maximum $ map maxyP ps
                 -- The maximum of all x interval maximums
-                maxx    = maximum $ map maxxP ps                 
+                maxx    = maximum $ map maxxP ps
                 -- The minimum of all y interval minimums
                 miny    = minimum $ map minyP ps
 
@@ -66,7 +68,7 @@ instance Predicates Predicate (Int,Int) where
     pickSplit es = linearSplit [e1] [e2] [e | e <- sort es, e /= e1, e/= e2] $ (length es + 1) `div` 2
         -- A tuple containing the two most disparate entries in the list their corresponding penalty penalty
         where (_, e1, e2) = maximum [greatestPenalty e es | e <- es]
-    
+
     -- | The area increase of the second predicate after a union with the first
     penalty p1 p2  =  area (union [p1,p2]) - area p2
 
@@ -79,7 +81,7 @@ minxP (Equals (x,_)) = x
 -- | The upper limit for the y coordinate of the predicate
 maxyP :: Predicate (a,a) -> a
 maxyP (Contains ((_,maxy),(_,_))) = maxy
-maxyP (Equals (_,y)) = y 
+maxyP (Equals (_,y)) = y
 
 -- | The upper limit for the x coordinate of the predicate
 maxxP :: Predicate (a,a) -> a
@@ -99,17 +101,17 @@ area (Contains ((minx,maxy),(maxx,miny))) = (maxx - minx) * (maxy - miny)
 
 -- | Calculates the greatest penalty between an entry and a list of entries
 -- | Returns a tuple containing the greatest penalty and the two entries for which the penalty was calculated
-greatestPenalty :: Entry Predicate (Int,Int) -> [Entry Predicate (Int,Int)] -> (Penalty, Entry Predicate (Int,Int), Entry Predicate (Int,Int))
+greatestPenalty ::  Entry Predicate (Int,Int) -> [Entry Predicate (Int,Int)] -> (Penalty (Int,Int), Entry Predicate (Int,Int), Entry Predicate (Int,Int))
 greatestPenalty e es = maximum [(penalty (entryPredicate e) (entryPredicate e1), e, e1) | e1 <- es]
 
 -- | Implementation of the linear split algorithm taking the minimal fill factor into account
-linearSplit :: [Entry Predicate (Int, Int)] -> [Entry Predicate (Int,Int)] -> 
+linearSplit :: [Entry Predicate (Int, Int)] -> [Entry Predicate (Int,Int)] ->
     [Entry Predicate (Int,Int)] -> Int -> ([Entry Predicate (Int,Int)], [Entry Predicate (Int,Int)])
 linearSplit es1 es2 [] _ = (es1,es2)
 linearSplit es1 es2 (e:es) max
     |length es1 == max  = (es1,es2 ++ (e:es))
     |length es2 == max  = (es1 ++ (e:es), es2)
     |otherwise          = if penalty (entryPredicate e) (union $ map entryPredicate es1) >
-                            penalty (entryPredicate e) (union $ map entryPredicate es2) 
+                            penalty (entryPredicate e) (union $ map entryPredicate es2)
                             then linearSplit es1 (e:es2) es max
                             else linearSplit (e:es1) es2 es max

@@ -12,6 +12,7 @@ representing an open interval, while the equality predicate is simply an interge
 -}
 
 {-# LANGUAGE MultiParamTypeClasses
+  , TypeFamilies
     #-}
 
 
@@ -34,23 +35,24 @@ data Predicate a = Contains (a,a)                   -- ^ containment predicate (
 
 -- | More documentation on the instance implementation in the source
 instance Predicates Predicate Int where
-    
+    type Penalty Int = Int
+
     -- | Two containment predicates are consistent if the intervals they represent overlap
     -- A containment and equality predicate are consistent if the interval represented by the former contains the value of the latter
     -- Two equality predicates are consistent if they represent the same value
     consistent (Contains (min1,max1)) (NodeEntry (_, Contains (min2,max2)))  = (min1 <= max2) && (max1 >= min2)
-    consistent (Equals a) (NodeEntry (_, Contains (min,max)))   = between a min max 
+    consistent (Equals a) (NodeEntry (_, Contains (min,max)))   = between a min max
     consistent (Contains (min,max)) (LeafEntry (_, Equals a))   = between a min max
     consistent (Equals a1) (LeafEntry (_, Equals a2))           = a1 == a2
-    
-    -- | A union of predicates is an interval spanning from the minimal 
+
+    -- | A union of predicates is an interval spanning from the minimal
     -- to the maximal value of all the predicats
     union ps = Contains (min,max)
                 -- The minimum of all interval minimums
         where   min         = minimum $ map minP ps
                 -- The maximum of all interval maximums
                 max         = maximum $ map maxP ps
-    
+
     -- | Seperates the sorted list of entries into two halves
     pickSplit es = splitAt ((length es + 1) `div` 2) sorted
         where   sorted  = sort es
