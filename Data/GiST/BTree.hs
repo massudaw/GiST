@@ -42,10 +42,10 @@ instance Predicates (Predicate Int) where
     -- | Two containment predicates are consistent if the intervals they represent overlap
     -- A containment and equality predicate are consistent if the interval represented by the former contains the value of the latter
     -- Two equality predicates are consistent if they represent the same value
-    consistent (Contains (min1,max1)) (NodeEntry (_, Contains (min2,max2)))  = (min1 <= max2) && (max1 >= min2)
-    consistent (Equals a) (NodeEntry (_, Contains (min,max)))   = between a min max
-    consistent (Contains (min,max)) (LeafEntry (_, Equals a))   = between a min max
-    consistent (Equals a1) (LeafEntry (_, Equals a2))           = a1 == a2
+    consistent (Contains (min1,max1)) (Contains (min2,max2))  = (min1 <= max2) && (max1 >= min2)
+    consistent (Equals a) (Contains (min,max))   = between a min max
+    consistent (Contains (min,max)) (Equals a)   = between a min max
+    consistent (Equals a1) (Equals a2)           = a1 == a2
 
     -- | A union of predicates is an interval spanning from the minimal
     -- to the maximal value of all the predicats

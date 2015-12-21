@@ -65,7 +65,7 @@ instance  (Eq a, Ord p) => Ord (Entry p a) where
 class ( Eq p , Ord (Penalty p)) => Predicates p where
     type Penalty p
     -- | Checks if the given entry is consistent with a given predicate
-    consistent  :: p -> Entry p a -> Bool
+    consistent  :: p -> p -> Bool
     -- | Returns a predicate that is the union of all predicates of the given list of entries
     union       :: [p] -> p
     -- | Calculates a numerical penalty for inserting the entry containing the first predicate

@@ -28,7 +28,7 @@ module Data.GiST.GiST
         GiST
         ,Entry(..)
         ,Predicates(..)
-        ,LeafEntry,NodeEntry,Penalty
+        ,LeafEntry,NodeEntry
         ,entryPredicate
         ,getEntries
         -- ** GiST operations
@@ -44,10 +44,10 @@ import Data.Ord (comparing)
 
 -- | Searches the GiST for leaf nodes that satisfy the given search predicate
 search  :: Predicates p  => p  -> GiST p a -> [a]
-search  p (Leaf es)     = [fst e | e <- es, consistent p (LeafEntry e)]
+search  p (Leaf es)     = [fst e | e <- es, consistent p (snd e)]
 search  _ (Node [])     = []
 search  p (Node (e:es))
-    |consistent p (NodeEntry e) = (search p (fst e)) ++ (search p (Node es))
+    |consistent p (snd e) = (search p (fst e)) ++ (search p (Node es))
     |otherwise                  = search p (Node es)
 
 -- | Inserts an entry into the tree, rebalancing the tree if necessary.
@@ -86,8 +86,8 @@ insert (toIns, p) (min,max) (Leaf es)
 -- | Deletes a leaf entry from the tree, rebalancing the tree if necessary.
 -- Rebalancing is done to satisfy the minimum and maximum fill factor
 -- of the tree (represented as an integer tuple)
-delete  :: Predicates p  => LeafEntry p a -> (Int, Int) -> GiST p a -> GiST p a
-delete (toDel, p) (min,max) (Node es)
+delete  :: Predicates p  => p  -> (Int, Int) -> GiST p a -> GiST p a
+delete p (min,max) (Node es)
         |length newEs == 1  = insertMultiple toAdd (makeRoot $ head newEs) (min,max)
         |otherwise          = insertMultiple toAdd (Node newEs) (min, max)
             -- The new entries after delete without Null entries
@@ -95,12 +95,12 @@ delete (toDel, p) (min,max) (Node es)
             -- The propagated entries to add
             toAdd = concat (map snd delNodes)
             -- The entries after delete
-            delNodes =  [if (consistent p (NodeEntry e))
-                            then (deleteAndCondense e (min,max) (toDel,p))
+            delNodes =  [if (consistent p (snd e))
+                            then (deleteAndCondense e (min,max) p)
                             else (e,[])
                         |e <- es]
 
-delete (toDel, p) (min,max) (Leaf es) = Leaf [e | e <- es, not $ consistent p (LeafEntry e)]
+delete p (min,max) (Leaf es) = Leaf [e | e <- es, not $ consistent p (snd e)]
 
 -- | Create a new empty GiST
 empty :: GiST p a
@@ -121,7 +121,7 @@ save gist f = TIO.writeFile f $ T.pack (show gist)
 -- | A helper function that propagates insertion through the subtrees and splits when necessary.
 -- If the node is overpopulated after the insertion, the node is split into
 -- two smaller nodes which are then added to the parent
-insertAndSplit :: (Predicates p ) => NodeEntry p a -> (Int,Int) -> LeafEntry p a -> Either (NodeEntry p a, NodeEntry p a) (NodeEntry p a)
+insertAndSplit :: Predicates p  => NodeEntry p a -> (Int,Int) -> LeafEntry p a -> Either (NodeEntry p a, NodeEntry p a) (NodeEntry p a)
 insertAndSplit (Node es,p) (min,max) (toIns,pred)
             |length newEs <= max  =  Right (Node newEs,union $ map snd newEs)
             |otherwise = Left ((Node  (map unNodeEntry es1), union $ map entryPredicate es1)
@@ -154,8 +154,8 @@ insertAndSplit (Leaf es,p) (min,max) (toIns,pred)
 -- If an internal node is underpopulated after deletion, the node and all it's subnodes are removed
 -- and all their leaf entries are stored for reinsertion. The deletion is then propagated to the parent
 -- of the node
-deleteAndCondense :: (Predicates p ) => NodeEntry p a -> (Int,Int) -> LeafEntry p a -> (NodeEntry p a, [LeafEntry p a])
-deleteAndCondense (Node es, pred) (min, max) (toDel, p)
+deleteAndCondense :: (Predicates p ) => NodeEntry p a -> (Int,Int) -> p  -> (NodeEntry p a, [LeafEntry p a])
+deleteAndCondense (Node es, pred) (min, max) p
         |length newEs < min = ((Null, pred), toAdd ++ getEntries (Node es))
         |otherwise          = ((Node newEs, union $ map snd newEs), toAdd)
             -- The new entries after delete without Null entries
@@ -163,17 +163,17 @@ deleteAndCondense (Node es, pred) (min, max) (toDel, p)
             -- The propagated entries to add
             toAdd = concat (map snd delNodes)
             -- The entries after delete
-            delNodes =  [if (consistent p (NodeEntry e))
-                            then (deleteAndCondense e (min,max) (toDel,p))
+            delNodes =  [if (consistent p (snd e))
+                            then (deleteAndCondense e (min,max) p)
                             else (e,[])
                         |e <- es]
 -- If a leaf is underpopulated after deletion, the leaf is removed and all its entries are
 -- stored for reinsertion. The deletion is then propagated to the parent of the node
-deleteAndCondense ((Leaf es),pred) (min, max) (toDel, p)
+deleteAndCondense ((Leaf es),pred) (min, max) p
     |length newEs < min = ((Null,pred), newEs)
     |otherwise          = ((Leaf newEs, union $ map snd newEs),[])
                 -- The new entries after delete without Null entries
-        where   newEs = [e | e <- es, not $ consistent p (LeafEntry e)]
+        where   newEs = [e | e <- es, not $ consistent p (snd e)]
 
 
 
@@ -186,7 +186,7 @@ insertMultiple (e:es) gist (min,max) = insertMultiple es afterInsert (min,max)
 
 
 -- Chooses the most appropriate subtree to insert the entry into
-chooseSubtree   :: (Predicates p  )=>[(NodeEntry p a)] -> LeafEntry p a -> (NodeEntry p a)
+chooseSubtree   :: Predicates p  =>[(NodeEntry p a)] -> LeafEntry p a -> (NodeEntry p a)
 chooseSubtree subtrees e    = fst  $ minimumBy (comparing snd) $ penalties --(head penalties)
         where   penalties = [(ne, penalty (snd e) (snd ne))|ne <- subtrees]
 
