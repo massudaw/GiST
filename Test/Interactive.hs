@@ -19,10 +19,10 @@ import qualified Data.Text as T
 -- Option e for creating an empty gist, i for adding data into the tree, d for deleting and s for searching
 main    :: IO()
 main =  do
-    args <- getArgs  
+    args <- getArgs
     let (flags, nonOpt, msgs) = getOpt RequireOrder options args
-    when (length flags /=2) $ do 
-        putStrLn "usage : main <-b|-r> <-i key|-d key|-s interval|-e> file" 
+    when (length flags /=2) $ do
+        putStrLn "usage : main <-b|-r> <-i key|-d key|-s interval|-e> file"
         exitFailure
     when (length nonOpt /= 1) $ do
         putStrLn "usage : main <-b|-r> <-i key|-d key|-s interval|-e> file"
@@ -30,19 +30,23 @@ main =  do
     let treeFlag = head flags
     let opFlag = flags!!1
     let file = nonOpt!!0
-    if (treeFlag == BTree ) then do
-        if (opFlag == Empty) then save (empty::GiST BTree.Predicate Int) file
-        else do
-            gist <- load file
-            executeOperationB gist opFlag file
-    else do
-        if (opFlag == Empty) then save (empty::GiST RTree.Predicate (Int,Int)) file
-        else do
-            gist <- load file
-            executeOperationR gist opFlag file
-    
-    
-    
+    if (treeFlag == BTree )
+      then do
+        if (opFlag == Empty)
+          then do
+              save (empty::GiST BTree.Predicate Int) file
+          else do
+              gist <- load file
+              executeOperationB gist opFlag file
+      else do
+          if (opFlag == Empty)
+            then save (empty::GiST RTree.Predicate (Int,Int)) file
+            else do
+                gist <- load file
+                executeOperationR gist opFlag file
+
+
+
 data Flag = BTree | RTree | Search String | Insert String | Delete String | Empty deriving (Eq)
 
 options :: [OptDescr Flag]
@@ -54,31 +58,31 @@ options = [
     Option ['d'] ["delete"] (ReqArg Delete  "DATA") "delete from GiST",
     Option ['e'] ["empty"] (NoArg Empty) "write empty GiST"
   ]
-   
+
 executeOperationB :: GiST BTree.Predicate Int -> Flag -> String -> IO()
-executeOperationB gist (Insert s) file  = do     
+executeOperationB gist (Insert s) file  = do
     let key = read s :: Int
     save (insert (key, BTree.Equals key) (2,4) gist) file
 executeOperationB gist (Delete s) file = do
-    let key = read s :: Int 
-    save (delete (key, BTree.Equals key) (2,4) gist) file 
+    let key = read s :: Int
+    save (delete (key, BTree.Equals key) (2,4) gist) file
 executeOperationB gist (Search s) file = do
     let (min,max) = read s :: (Int,Int)
     when (min >= max) $ do
-        putStrLn "usage for BTree : main <-i key|-d key|-s (min,max)>"   
+        putStrLn "usage for BTree : main <-i key|-d key|-s (min,max)>"
         exitFailure
     putStrLn $ show (search (BTree.Contains (min,max)) gist)
 
 executeOperationR :: GiST RTree.Predicate (Int,Int) -> Flag -> String -> IO()
 executeOperationR gist (Insert s) file  = do
     let key = read s :: (Int,Int)
-    save (insert (key, RTree.Equals key) (2,4) gist) file 
+    save (insert (key, RTree.Equals key) (2,4) gist) file
 executeOperationR gist (Delete s) file = do
-    let key = read s :: (Int,Int) 
-    save (delete (key, RTree.Equals key) (2,4) gist) file 
+    let key = read s :: (Int,Int)
+    save (delete (key, RTree.Equals key) (2,4) gist) file
 executeOperationR gist (Search s) file = do
     let ((minx,maxy),(maxx,miny)) = read s :: ((Int,Int),(Int,Int))
     when (minx > maxy || miny > maxy) $ do
-        putStrLn "usage for RTree : main <-i key|-d key|-s ((minx,maxy),(maxx,miny))>"   
+        putStrLn "usage for RTree : main <-i key|-d key|-s ((minx,maxy),(maxx,miny))>"
         exitFailure
     putStrLn $ show (search (RTree.Contains ((minx,maxy),(maxx,miny))) gist)

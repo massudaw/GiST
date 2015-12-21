@@ -20,29 +20,30 @@ import qualified Data.Text as T
 -- The data is written after all the insertions are finished
 main    :: IO()
 main =  do
-    args <- getArgs  
+    args <- getArgs
     let (flags, nonOpt, msgs) = getOpt RequireOrder options args
-    when (length flags /=1) $ do 
-        putStrLn "usage : main <-b|-r> max_range num_inserts" 
+    when (length flags /=1) $ do
+        putStrLn "usage : main <-b|-r> max_range num_inserts"
         exitFailure
     when (length nonOpt /= 2) $ do
         putStrLn "usage : main <-b|-r> max_range num_inserts"
         exitFailure
-    if (head flags == BTree ) then do
+    if (head flags == BTree )
+      then do
         let gist = empty :: GiST BTree.Predicate Int
         g <- newStdGen
         let file = "BTreeRandom.txt"
         save (executeOperationB gist (read $ nonOpt!!0) (read $ nonOpt!!1) g) file
-        
-    else do
-        let gist = empty :: GiST RTree.Predicate (Int,Int)
-        g <- newStdGen
-        let file = "RTreeRandom.txt"
-        save (executeOperationR gist (read $ nonOpt!!0) (read $ nonOpt!!1) g) file
-        
-    
-    
-    
+
+      else do
+          let gist = empty :: GiST RTree.Predicate (Int,Int)
+          g <- newStdGen
+          let file = "RTreeRandom.txt"
+          save (executeOperationR gist (read $ nonOpt!!0) (read $ nonOpt!!1) g) file
+
+
+
+
 data Flag = BTree | RTree deriving (Eq)
 
 options :: [OptDescr Flag]
@@ -50,8 +51,8 @@ options = [
     Option ['b'] ["btree"] (NoArg BTree)  "use BTree GiST",
     Option ['r'] ["rtree"] (NoArg RTree)  "use RTree GiST"
   ]
-   
-    
+
+
 executeOperationB :: GiST BTree.Predicate Int -> Int -> Int -> StdGen -> GiST BTree.Predicate Int
 executeOperationB g _ 0 _ = g
 executeOperationB gist max num gen = executeOperationB inserted max (num-1) g

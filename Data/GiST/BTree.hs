@@ -13,6 +13,7 @@ representing an open interval, while the equality predicate is simply an interge
 
 {-# LANGUAGE MultiParamTypeClasses
   , TypeFamilies
+  , FlexibleInstances
     #-}
 
 
@@ -23,7 +24,8 @@ module Data.GiST.BTree (
 ) where
 
 import Data.GiST.GiST(Entry(..),entryPredicate,Predicates(..),Penalty)
-import Data.List(sort)
+import Data.List(sort,sortBy)
+import Data.Ord
 
 
 
@@ -34,8 +36,8 @@ data Predicate a = Contains (a,a)                   -- ^ containment predicate (
 
 
 -- | More documentation on the instance implementation in the source
-instance Predicates Predicate Int where
-    type Penalty Int = Int
+instance Predicates (Predicate Int) where
+    type Penalty (Predicate Int) = Int
 
     -- | Two containment predicates are consistent if the intervals they represent overlap
     -- A containment and equality predicate are consistent if the interval represented by the former contains the value of the latter
@@ -55,7 +57,7 @@ instance Predicates Predicate Int where
 
     -- | Seperates the sorted list of entries into two halves
     pickSplit es = splitAt ((length es + 1) `div` 2) sorted
-        where   sorted  = sort es
+        where   sorted  = sortBy (comparing entryPredicate ) es
     -- | The distance between the intervals (or values) of the predicates
     penalty p1 p2 = maximum[(minP p2)-(minP p1), 0] + maximum [(maxP p1)-(maxP p2),0]
 

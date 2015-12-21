@@ -1,6 +1,5 @@
-{-# LANGUAGE MultiParamTypeClasses
+{-# LANGUAGE DoAndIfThenElse,MultiParamTypeClasses
     #-}
-
 module Main where
 
 import System.IO
@@ -21,10 +20,10 @@ import qualified Data.Text as T
 -- The GiST is written after every insert
 main    :: IO()
 main =  do
-    args <- getArgs  
+    args <- getArgs
     let (flags, nonOpt, msgs) = getOpt RequireOrder options args
-    when (length flags /=1) $ do 
-        putStrLn "usage : main <-b|-r> max_range num_inserts" 
+    when (length flags /=1) $ do
+        putStrLn "usage : main <-b|-r> max_range num_inserts"
         exitFailure
     when (length nonOpt /= 2) $ do
         putStrLn "usage : main <-b|-r> max_range num_inserts"
@@ -41,9 +40,9 @@ main =  do
         save gist file
         g <- newStdGen
         executeOperationR file (read $ nonOpt!!0) (read $ nonOpt!!1) g
-    
-    
-    
+
+
+
 data Flag = BTree | RTree deriving (Eq)
 
 options :: [OptDescr Flag]
@@ -51,12 +50,12 @@ options = [
     Option ['b'] ["btree"] (NoArg BTree)  "use BTree GiST",
     Option ['r'] ["rtree"] (NoArg RTree)  "use RTree GiST"
   ]
-   
-    
-    
+
+
+
 executeOperationB :: String -> Int -> Int -> StdGen -> IO()
 executeOperationB _ _ 0 _ = return()
-executeOperationB file max num gen = do     
+executeOperationB file max num gen = do
     gist <- (load file :: IO (GiST BTree.Predicate Int))
     let (key,g) = randomR (1,max) gen
     putStrLn $ show $ length $ getEntries gist

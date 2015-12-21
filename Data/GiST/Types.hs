@@ -29,6 +29,8 @@ data GiST p a  = Leaf [LeafEntry p a]       -- ^ leaf node
                | Null                       -- ^ a null GiST
                deriving (Eq, Show, Read)
 
+entryPred (LeafEntry (v,p)) = p
+entryPred (NodeEntry (v,p)) = p
 
 -- | A general entry type for the gist
 data Entry p a = LeafEntry (LeafEntry p a)
@@ -39,19 +41,19 @@ unLeafEntry  (LeafEntry l) =  l
 unNodeEntry  (NodeEntry n) =  n
 
 -- | Returns the predicate of this entry
-entryPredicate :: Entry p a -> p a
+entryPredicate :: Entry p a -> p
 entryPredicate (LeafEntry e) = snd e
 entryPredicate (NodeEntry e) = snd e
 
 -- | A leaf entry has a predicate and data
-type LeafEntry p a = (a, p a)
+type LeafEntry p a = (a, p )
 
 -- | A node entry has a predicate and a subtree
-type NodeEntry p a = (GiST p a, p a)
+type NodeEntry p a = (GiST p a, p )
 
 
 -- | Comparison only based on the predicate
-instance  (Eq a, Ord (p a)) => Ord (Entry p a) where
+instance  (Eq a, Ord p) => Ord (Entry p a) where
     (<=) (LeafEntry (_,p1)) (LeafEntry (_,p2)) = p1 <= p2
     (<=) (NodeEntry (_,p1)) (NodeEntry (_,p2)) = p1 <= p2
     (<=) (NodeEntry (_,p1)) (LeafEntry (_,p2)) = p1 <= p2
@@ -60,17 +62,17 @@ instance  (Eq a, Ord (p a)) => Ord (Entry p a) where
 
 -- | The predicate class that can be instanced by the user to create new types
 -- of balanced search trees
-class ( Eq (p a), Ord (Penalty a)) => Predicates p a where
-    type Penalty a
+class ( Eq p , Ord (Penalty p)) => Predicates p where
+    type Penalty p
     -- | Checks if the given entry is consistent with a given predicate
-    consistent  :: p a -> Entry p a -> Bool
+    consistent  :: p -> Entry p a -> Bool
     -- | Returns a predicate that is the union of all predicates of the given list of entries
-    union       :: [p a] -> p a
+    union       :: [p] -> p
     -- | Calculates a numerical penalty for inserting the entry containing the first predicate
     -- into a subtree rooted at an entry containing the second predicate
-    penalty     :: p a -> p a -> Penalty a
+    penalty     :: p -> p  -> Penalty p
     -- | Given a list of entries, returns two disjunct subsets that contain the entries in the list.
     -- Focus is on minimising the overlap between the splitted entries' predicates
-    pickSplit   :: [Entry p a] -> ([Entry p a], [Entry p a])
+    pickSplit   :: [Entry p a ] -> ([Entry p a ], [Entry p a])
 
 

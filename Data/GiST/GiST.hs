@@ -30,6 +30,7 @@ module Data.GiST.GiST
         ,Predicates(..)
         ,LeafEntry,NodeEntry,Penalty
         ,entryPredicate
+        ,getEntries
         -- ** GiST operations
         ,search, insert, delete, empty, save, load, getData, size
     ) where
@@ -42,7 +43,7 @@ import Data.Ord (comparing)
 
 
 -- | Searches the GiST for leaf nodes that satisfy the given search predicate
-search  :: Predicates p a => p a -> GiST p a -> [a]
+search  :: Predicates p  => p  -> GiST p a -> [a]
 search  p (Leaf es)     = [fst e | e <- es, consistent p (LeafEntry e)]
 search  _ (Node [])     = []
 search  p (Node (e:es))
@@ -52,7 +53,7 @@ search  p (Node (e:es))
 -- | Inserts an entry into the tree, rebalancing the tree if necessary.
 -- Rebalancing is done to satisfy the minimum and maximum fill factor
 -- of the tree (represented as an integer tuple)
-insert  :: Predicates p a => LeafEntry p a -> (Int, Int) -> GiST p a -> GiST p a
+insert  :: Predicates p  => LeafEntry p a -> (Int, Int) -> GiST p a -> GiST p a
 insert (toIns, pred) (min,max) (Node es)
         |not $ null $ search pred (Node es) = Node es
         |length newEs <= max   =  Node newEs
@@ -85,7 +86,7 @@ insert (toIns, p) (min,max) (Leaf es)
 -- | Deletes a leaf entry from the tree, rebalancing the tree if necessary.
 -- Rebalancing is done to satisfy the minimum and maximum fill factor
 -- of the tree (represented as an integer tuple)
-delete  :: Predicates p a => LeafEntry p a -> (Int, Int) -> GiST p a -> GiST p a
+delete  :: Predicates p  => LeafEntry p a -> (Int, Int) -> GiST p a -> GiST p a
 delete (toDel, p) (min,max) (Node es)
         |length newEs == 1  = insertMultiple toAdd (makeRoot $ head newEs) (min,max)
         |otherwise          = insertMultiple toAdd (Node newEs) (min, max)
@@ -106,12 +107,12 @@ empty :: GiST p a
 empty = Leaf []
 
 -- | Loads a GiST from file
-load :: (Read a, Read (p a)) => FilePath -> IO (GiST p a)
+load :: (Read a, Read p ) => FilePath -> IO (GiST p a)
 load f = do s <- TIO.readFile f
             return (read $ T.unpack s)
 
 -- | Saves the GiST to file
-save :: (Show a, Show (p a)) => GiST p a -> FilePath -> IO ()
+save :: (Show a, Show p ) => GiST p a -> FilePath -> IO ()
 save gist f = TIO.writeFile f $ T.pack (show gist)
 
 
@@ -120,7 +121,7 @@ save gist f = TIO.writeFile f $ T.pack (show gist)
 -- | A helper function that propagates insertion through the subtrees and splits when necessary.
 -- If the node is overpopulated after the insertion, the node is split into
 -- two smaller nodes which are then added to the parent
-insertAndSplit :: (Predicates p a) => NodeEntry p a -> (Int,Int) -> LeafEntry p a -> Either (NodeEntry p a, NodeEntry p a) (NodeEntry p a)
+insertAndSplit :: (Predicates p ) => NodeEntry p a -> (Int,Int) -> LeafEntry p a -> Either (NodeEntry p a, NodeEntry p a) (NodeEntry p a)
 insertAndSplit (Node es,p) (min,max) (toIns,pred)
             |length newEs <= max  =  Right (Node newEs,union $ map snd newEs)
             |otherwise = Left ((Node  (map unNodeEntry es1), union $ map entryPredicate es1)
@@ -153,7 +154,7 @@ insertAndSplit (Leaf es,p) (min,max) (toIns,pred)
 -- If an internal node is underpopulated after deletion, the node and all it's subnodes are removed
 -- and all their leaf entries are stored for reinsertion. The deletion is then propagated to the parent
 -- of the node
-deleteAndCondense :: (Predicates p a) => NodeEntry p a -> (Int,Int) -> LeafEntry p a -> (NodeEntry p a, [LeafEntry p a])
+deleteAndCondense :: (Predicates p ) => NodeEntry p a -> (Int,Int) -> LeafEntry p a -> (NodeEntry p a, [LeafEntry p a])
 deleteAndCondense (Node es, pred) (min, max) (toDel, p)
         |length newEs < min = ((Null, pred), toAdd ++ getEntries (Node es))
         |otherwise          = ((Node newEs, union $ map snd newEs), toAdd)
@@ -177,7 +178,7 @@ deleteAndCondense ((Leaf es),pred) (min, max) (toDel, p)
 
 
 -- Inserts multiple entries into a GiST
-insertMultiple :: (Predicates p a) => [LeafEntry p a] -> GiST p a -> (Int,Int) -> GiST p a
+insertMultiple :: (Predicates p ) => [LeafEntry p a] -> GiST p a -> (Int,Int) -> GiST p a
 insertMultiple [] gist _ = gist
 insertMultiple (e:es) gist (min,max) = insertMultiple es afterInsert (min,max)
     where afterInsert = insert e (min,max) gist
@@ -185,7 +186,7 @@ insertMultiple (e:es) gist (min,max) = insertMultiple es afterInsert (min,max)
 
 
 -- Chooses the most appropriate subtree to insert the entry into
-chooseSubtree   :: (Predicates p a )=>[(NodeEntry p a)] -> LeafEntry p a -> (NodeEntry p a)
+chooseSubtree   :: (Predicates p  )=>[(NodeEntry p a)] -> LeafEntry p a -> (NodeEntry p a)
 chooseSubtree subtrees e    = fst  $ minimumBy (comparing snd) $ penalties --(head penalties)
         where   penalties = [(ne, penalty (snd e) (snd ne))|ne <- subtrees]
 
