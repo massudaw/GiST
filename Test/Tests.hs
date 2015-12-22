@@ -8,7 +8,7 @@ import Data.List(sort)
 import qualified Data.GiST.BTree as BTree
 import qualified Data.GiST.RTree as RTree
 -- | A small series of tests on the functionality of the GiST
-
+{-
 bounds = (2,5)
 -- empty GiST
 bg1 = empty::GiST BTree.Predicate Int
@@ -45,4 +45,19 @@ rs3 = search (RTree.Contains ((20,50),(45,35))) rg3
 rt3 = sort rs3 == [(45,36)]
 --test results
 r = [rt1,rt2,rt3]
+
+-}
+main = do
+  let pre =  testDel [0..4] $ testIns  [0 :: Int ..26]
+
+  print pre
+  print ( delete (BTree.Equals 5 ) (3,6) pre)
+
+testIns s =
+   foldl (\ m  i-> insert ((), BTree.Equals i) (3,6) m) empty ( s)
+testDel s  m =
+   foldl (\ m  i-> delete (BTree.Equals i) (3,6) m) m ( s)
+
+testInsDel l = testDel l $ testIns l
+
 

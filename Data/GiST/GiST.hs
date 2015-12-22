@@ -154,9 +154,9 @@ insertAndSplit (Leaf es,p) (min,max) (toIns,pred)
 -- If an internal node is underpopulated after deletion, the node and all it's subnodes are removed
 -- and all their leaf entries are stored for reinsertion. The deletion is then propagated to the parent
 -- of the node
-deleteAndCondense :: (Predicates p ) => NodeEntry p a -> (Int,Int) -> p  -> (NodeEntry p a, [LeafEntry p a])
+deleteAndCondense :: Predicates p  => NodeEntry p a -> (Int,Int) -> p  -> (NodeEntry p a, [LeafEntry p a])
 deleteAndCondense (Node es, pred) (min, max) p
-        |length newEs < min = ((Null, pred), toAdd ++ getEntries (Node es))
+        |length newEs < min = ((Null, p), toAdd ++ filter (not . consistent p . snd) (getEntries (Node es)))
         |otherwise          = ((Node newEs, union $ map snd newEs), toAdd)
             -- The new entries after delete without Null entries
     where   newEs = filter (not.isNull) (map fst delNodes)
@@ -187,16 +187,8 @@ insertMultiple (e:es) gist (min,max) = insertMultiple es afterInsert (min,max)
 
 -- Chooses the most appropriate subtree to insert the entry into
 chooseSubtree   :: Predicates p  =>[(NodeEntry p a)] -> LeafEntry p a -> (NodeEntry p a)
-chooseSubtree subtrees e    = fst  $ minimumBy (comparing snd) $ penalties --(head penalties)
+chooseSubtree subtrees e    = fst  $ minimumBy (comparing snd) $ penalties
         where   penalties = [(ne, penalty (snd e) (snd ne))|ne <- subtrees]
-
-
--- Return the minimum penalty and corresponding entry from a list od entries and penalties
-minPenalty :: Ord (Penalty a) => [(NodeEntry p a, Penalty a )]->(NodeEntry p a, Penalty a) -> NodeEntry p a
-minPenalty [] p = fst p
-minPenalty ((ne, pen):ps) (nemin, minpen)
-    |pen < minpen   = minPenalty ps (ne, pen)
-    |otherwise      = minPenalty ps (nemin, minpen)
 
 
 -- Takes an entry and extracts the GiST from it
