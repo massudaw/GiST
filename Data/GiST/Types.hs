@@ -16,18 +16,22 @@ which define the data stored in the tree and the tree's behavior during insert, 
 {-# LANGUAGE MultiParamTypeClasses
     ,FlexibleInstances
     ,TypeFamilies
+    ,DeriveFunctor
+    ,DeriveFoldable
+    ,DeriveTraversable
     ,FlexibleContexts
     #-}
 
 module Data.GiST.Types where
 
 import Data.Foldable as F
+import Data.Traversable as T
 
 -- | The data structure used for building the GiST
 data GiST p a  = Leaf [LeafEntry p a]       -- ^ leaf node
                | Node [NodeEntry p a]       -- ^ internal node
                | Null                       -- ^ a null GiST
-               deriving (Eq, Show, Read)
+               deriving (Eq, Show, Read,Functor,F.Foldable,T.Traversable)
 
 entryPred (LeafEntry (v,p)) = p
 entryPred (NodeEntry (v,p)) = p
@@ -64,8 +68,11 @@ instance  (Eq a, Ord p) => Ord (Entry p a) where
 -- of balanced search trees
 class ( Eq p , Ord (Penalty p)) => Predicates p where
     type Penalty p
+    type Query p
     -- | Checks if the given entry is consistent with a given predicate
     consistent  :: p -> p -> Bool
+    -- | Check if the given query is consistent with a given predicate
+    match :: Query p -> p -> Bool
     -- | Returns a predicate that is the union of all predicates of the given list of entries
     union       :: [p] -> p
     -- | Calculates a numerical penalty for inserting the entry containing the first predicate

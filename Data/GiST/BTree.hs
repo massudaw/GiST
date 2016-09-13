@@ -38,6 +38,7 @@ data Predicate a = Contains (a,a)                   -- ^ containment predicate (
 -- | More documentation on the instance implementation in the source
 instance Predicates (Predicate Int) where
     type Penalty (Predicate Int) = Int
+    type Query (Predicate Int) = Predicate Int
 
     -- | Two containment predicates are consistent if the intervals they represent overlap
     -- A containment and equality predicate are consistent if the interval represented by the former contains the value of the latter
@@ -46,6 +47,7 @@ instance Predicates (Predicate Int) where
     consistent (Equals a) (Contains (min,max))   = between a min max
     consistent (Contains (min,max)) (Equals a)   = between a min max
     consistent (Equals a1) (Equals a2)           = a1 == a2
+    match = consistent
 
     -- | A union of predicates is an interval spanning from the minimal
     -- to the maximal value of all the predicats

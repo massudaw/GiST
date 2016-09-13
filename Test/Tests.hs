@@ -48,10 +48,7 @@ r = [rt1,rt2,rt3]
 
 -}
 main = do
-  let pre =  testDel [0..4] $ testIns  [0 :: Int ..26]
-
-  print pre
-  print ( delete (BTree.Equals 5 ) (3,6) pre)
+  print (testInsDel [0 :: Int ..10000])
 
 testIns s =
    foldl (\ m  i-> insert ((), BTree.Equals i) (3,6) m) empty ( s)

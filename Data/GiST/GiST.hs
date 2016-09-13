@@ -32,7 +32,7 @@ module Data.GiST.GiST
         ,entryPredicate
         ,getEntries
         -- ** GiST operations
-        ,search, insert, delete, empty, save, load, getData, size
+        ,query,search,searchKey, insert, delete, empty, save, load, getData, size
     ) where
 
 import Data.GiST.Types
@@ -40,6 +40,25 @@ import qualified Data.Text.IO as TIO
 import qualified Data.Text as T
 import Data.List (null,minimumBy)
 import Data.Ord (comparing)
+
+-- | Searches the GiST for leaf nodes that satisfy the given search predicate
+searchKey  :: Predicates p  => p  -> GiST p a -> [(a,p)]
+searchKey  p (Leaf es)     = [e | e <- es, consistent p (snd e)]
+searchKey  _ (Node [])     = []
+searchKey  p (Node (e:es))
+    |consistent p (snd e) = (searchKey p (fst e)) ++ (searchKey p (Node es))
+    |otherwise                  = searchKey p (Node es)
+
+
+query :: Predicates p  => Query p  -> GiST p a -> [(a,p)]
+query p (Leaf es)     = [e | e <- es, match p (snd e)]
+query _ (Node [])     = []
+query p (Node (e:es))
+    |match p (snd e) = (query p (fst e)) ++ (query p (Node es))
+    |otherwise                  = query p (Node es)
+
+
+
 
 
 -- | Searches the GiST for leaf nodes that satisfy the given search predicate
