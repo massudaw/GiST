@@ -21,15 +21,13 @@ is simply a 2D point (tuple of two integers).
 
 module Data.GiST.RTree (
     Predicate(..)
-    ,greatestPenalty
-    ,linearSplit
-    ,pickSplitG
 ) where
 
 import Data.GiST.GiST(Entry(..),entryPredicate,Predicates(..),Penalty)
 import Data.GiST.BTree(between)
 import Data.List(sort,sortBy,maximumBy)
 import Data.Ord(comparing)
+import qualified Data.Sequence as S
 
 
 data Predicate a = Contains (a,a)               -- ^ containment predicate (rectangle)
@@ -60,19 +58,18 @@ instance Predicates (Predicate (Int,Int)) where
     -- and the maximal x and minimal y coordinate of all predicates as the lower right corner
     union ps = Contains ((minx,maxy),(maxx,miny))
                 -- The minimum of all x interval minimums
-        where   minx    = minimum $ map minxP ps
+        where   minx    = minimum $ fmap minxP ps
                 -- The maximum of all y interval maximums
-                maxy    = maximum $ map maxyP ps
+                maxy    = maximum $ fmap maxyP ps
                 -- The maximum of all x interval maximums
-                maxx    = maximum $ map maxxP ps
+                maxx    = maximum $ fmap maxxP ps
                 -- The minimum of all y interval minimums
-                miny    = minimum $ map minyP ps
+                miny    = minimum $ fmap minyP ps
 
     -- | Seperates the sorted list of entries into two halves using the linear split algorithm
-    pickSplit = pickSplitG
 
     -- | The area increase of the second predicate after a union with the first
-    penalty p1 p2  =  area (union [p1,p2]) - area p2
+    penalty p1 p2  =  area (union (S.fromList [p1,p2])) - area p2
 
 
 -- | The lower limit for the x coordinate of the predicate
@@ -100,27 +97,5 @@ area :: Predicate (Int,Int) -> Int
 area (Equals _) = 0
 area (Contains ((minx,maxy),(maxx,miny))) = (maxx - minx) * (maxy - miny)
 
-
-greatestPenalty :: (Ord f  ,Predicates f  ) => Entry f b -> [Entry f b] -> (Penalty f , Entry f b, Entry f b)
-greatestPenalty e es = maximumBy (comparing (\(p,_,_) -> p)) [(penalty (entryPredicate e) (entryPredicate e1), e, e1) | e1 <- es]
-
--- | Implementation of the linear split algorithm taking the minimal fill factor into account
-linearSplit :: (Ord f ,Predicates f  ) => [Entry f b] -> [Entry f b] ->
-    [Entry f b] -> Int -> ([Entry f b], [Entry f b])
-linearSplit es1 es2 [] _ = (es1,es2)
-linearSplit es1 es2 (e:es) max
-    |length es1 == max  = (es1,es2 ++ (e:es))
-    |length es2 == max  = (es1 ++ (e:es), es2)
-    |otherwise          = if penalty (entryPredicate e) (union $ map entryPredicate es1) >
-                            penalty (entryPredicate e) (union $ map entryPredicate es2)
-                            then linearSplit es1 (e:es2) es max
-                            else linearSplit (e:es1) es2 es max
-
-pickSplitG
-  :: (Predicates f , Ord (f )) =>
-     [Entry f b] -> ([Entry f b], [Entry f b])
-pickSplitG es = linearSplit [e1] [e2] [e | e <- sortBy (comparing entryPredicate)  es, entryPredicate e /= entryPredicate e1, entryPredicate e/= entryPredicate e2] $ (length es + 1) `div` 2
-        -- A tuple containing the two most disparate entries in the list their corresponding penalty penalty
-        where (_, e1, e2) = maximumBy (comparing (\(a,_,_) -> a)) [greatestPenalty e es | e <- es]
 
 

@@ -19,67 +19,147 @@ which define the data stored in the tree and the tree's behavior during insert, 
     ,DeriveFunctor
     ,DeriveFoldable
     ,DeriveTraversable
+    ,DeriveGeneric
     ,FlexibleContexts
+    ,ViewPatterns
+    ,PatternSynonyms
+    ,ScopedTypeVariables
     #-}
 
 module Data.GiST.Types where
 
 import Data.Foldable as F
+import Data.Monoid
+import Control.Monad (join)
+import Control.DeepSeq
+import GHC.Generics
 import Data.Traversable as T
+import Data.Ord
+import Data.Maybe (fromJust,isJust)
+import qualified Data.Sequence as S
+import Data.Sequence ( Seq)
+import qualified Data.List as L
+
+
+import qualified Data.Sequence as Seq
+
+pattern Empty   <- (S.viewl -> S.EmptyL)  where Empty = S.empty
+pattern x :< xs <- (S.viewl -> x S.:< xs) where (:<)  = (S.<|)
+pattern xs :> x <- (S.viewr -> xs S.:> x) where (:>)  = (S.|>)
+
+pattern NEmpty :: () => Predicates p => Prefix p
+pattern NEmpty   <- (uncons -> Nothing ) where NEmpty = undefined
+
+pattern (:-) :: () => Predicates p => p -> Prefix p -> Prefix p
+pattern x :- xs <- (uncons -> Just (x ,xs))
+
 
 -- | The data structure used for building the GiST
-data GiST p a  = Leaf [LeafEntry p a]       -- ^ leaf node
-               | Node [NodeEntry p a]       -- ^ internal node
+data GiST p a  = Leaf !(Seq (LeafEntry p a))       -- ^ leaf node
+               | Node !(Seq (NodeEntry GiST p a))      -- ^ internal node
                | Null                       -- ^ a null GiST
-               deriving (Eq, Show, Read,Functor,F.Foldable,T.Traversable)
+               deriving (Functor,F.Foldable,T.Traversable,Generic)
 
-entryPred (LeafEntry (v,p)) = p
-entryPred (NodeEntry (v,p)) = p
+
+
+
+
 
 -- | A general entry type for the gist
-data Entry p a = LeafEntry (LeafEntry p a)
-               | NodeEntry (NodeEntry p a)
-               deriving (Eq, Show, Read)
+data Entry f p a = LeafEntry !(LeafEntry p a)
+                 | NodeEntry !(NodeEntry f p a)
+
 
 unLeafEntry  (LeafEntry l) =  l
+{-# INLINE unLeafEntry #-}
 unNodeEntry  (NodeEntry n) =  n
+{-# INLINE unNodeEntry #-}
 
 -- | Returns the predicate of this entry
-entryPredicate :: Entry p a -> p
-entryPredicate (LeafEntry e) = snd e
-entryPredicate (NodeEntry e) = snd e
+entryPredicate :: Entry f p a -> Either (Node p) p
+entryPredicate (LeafEntry e) = Right $ snd e
+entryPredicate (NodeEntry e) = Left $ snd e
+{-# INLINE entryPredicate #-}
 
 -- | A leaf entry has a predicate and data
 type LeafEntry p a = (a, p )
 
 -- | A node entry has a predicate and a subtree
-type NodeEntry p a = (GiST p a, p )
+type NodeEntry f p a = (f p a, Node p )
 
-
--- | Comparison only based on the predicate
-instance  (Eq a, Ord p) => Ord (Entry p a) where
-    (<=) (LeafEntry (_,p1)) (LeafEntry (_,p2)) = p1 <= p2
-    (<=) (NodeEntry (_,p1)) (NodeEntry (_,p2)) = p1 <= p2
-    (<=) (NodeEntry (_,p1)) (LeafEntry (_,p2)) = p1 <= p2
-    (<=) (LeafEntry (_,p1)) (NodeEntry (_,p2)) = p1 <= p2
-
+data UnconsPred p
+  = NoPred
+  | UnconsPred (p,Prefix p)
 
 -- | The predicate class that can be instanced by the user to create new types
 -- of balanced search trees
-class ( Eq p , Ord (Penalty p)) => Predicates p where
+class (Ord (Penalty p)) => Predicates p where
     type Penalty p
+    type Node p
     type Query p
+    data Prefix p
     -- | Checks if the given entry is consistent with a given predicate
-    consistent  :: p -> p -> Bool
+    uncons :: Prefix p -> Maybe (p,Prefix p)
+    consistent  :: Either (Node p) p -> Either (Node p ) p -> Bool
     -- | Check if the given query is consistent with a given predicate
-    match :: Query p -> p -> Bool
+    match :: Query p -> Either (Node p) p -> Bool
     -- | Returns a predicate that is the union of all predicates of the given list of entries
-    union       :: [p] -> p
+    bound :: Either (Node p) p -> Node p
+    merge :: Either (Node p) p -> Either (Node p) p -> Node p
+
     -- | Calculates a numerical penalty for inserting the entry containing the first predicate
     -- into a subtree rooted at an entry containing the second predicate
-    penalty     :: p -> p  -> Penalty p
+    penalty  :: Either (Node p) p -> Either (Node p ) p  -> Penalty p
     -- | Given a list of entries, returns two disjunct subsets that contain the entries in the list.
     -- Focus is on minimising the overlap between the splitted entries' predicates
-    pickSplit   :: [Entry p a ] -> ([Entry p a ], [Entry p a])
+    pickSplit :: Seq (Entry f p b) -> ((Node p,Seq (Entry f p b)), (Node p,Seq (Entry f p b)))
+    pickSplit = pickSplitG
+
+union :: Predicates p => Seq (Either (Node p) p) -> Node p
+union l  = case S.viewl l of
+    i S.:< ps -> F.foldl' (\i l-> merge (Left i) l ) (bound i) ps
+{-# INLINE union #-}
+
+greatestPenaltyLinear :: (Predicates f  ) => Seq (Entry g f b) -> (Seq (Entry g f b) , Entry g f b, Entry g f b)
+greatestPenaltyLinear es = (items,e1,e2)
+  where m = S.mapWithIndex (\ix1 e1 ->
+             let li = deleteAt ix1 es
+             in S.mapWithIndex (\ ix e ->
+               let lii = deleteAt ix li
+               in (lii,penalty (entryPredicate e1) (entryPredicate e),e1,e))li ) es
+        (items,_,e1,e2)= maximumBy (comparing ((\(~(_,p,_,_)) ->p ))) $ maximumBy (comparing ((\(~(_,p,_,_)) ->p ))) <$>  m
+{-# INLINE greatestPenaltyLinear #-}
+
+
+
+
+-- | Implementation of the linear split algorithm taking the minimal fill factor into account
+linearSplit :: (Predicates f  ) => (Node f,Seq (Entry g f b)) -> (Node f,Seq (Entry g f b)) ->
+  Seq (Entry g f b) -> Int -> ((Node f ,Seq (Entry g f b)), (Node f ,Seq (Entry g f b)))
+linearSplit (p1,es1) (p2,es2) (e:<es) max
+    |length es1 == max  = ((p1,es1),(union (Left p2:< fmap entryPredicate (e:<es)),es2 <> (e:<es)))
+    |length es2 == max  = ((union (Left p1:< fmap entryPredicate (e:<es)),es1 <> (e:<es)), (p2,es2))
+    |otherwise         = if penalty (entryPredicate e) (Left $ p1) >
+                            penalty (entryPredicate e) (Left $ p2)
+                            then linearSplit (p1,es1) u2 es max
+                            else linearSplit  u1 (p2,es2) es max
+  where
+    u1 = (merge (entryPredicate e ) (Left p1),e:<es1)
+    u2 = (merge (entryPredicate e ) (Left p2),e:<es2)
+linearSplit es1 es2 Empty _ = (es1,es2)
+{-# INLINE linearSplit#-}
+
+
+pickSplitG
+  :: (Predicates f ) =>
+    Seq (Entry g f b) -> ((Node f ,Seq (Entry g f b)), (Node f,Seq (Entry g f b)))
+pickSplitG es = linearSplit (bound (entryPredicate e1),pure e1) (bound (entryPredicate e1),pure e2)  items len
+        -- A tuple containing the two most disparate entries in the list their corresponding penalty penalty
+        where (items, e1, e2) =  greatestPenaltyLinear es
+              len = (S.length es + 1) `div` 2
+{-# INLINE pickSplitG #-}
+
+deleteAt ix s = h <> S.drop 1 t
+  where (h,t) = S.splitAt ix  s
 
 
