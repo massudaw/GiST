@@ -137,7 +137,7 @@ greatestPenaltyLinear es = (items,e1,e2)
 linearSplit :: (Predicates f  ) => (Node f,Seq (Entry g f b)) -> (Node f,Seq (Entry g f b)) ->
   Seq (Entry g f b) -> Int -> ((Node f ,Seq (Entry g f b)), (Node f ,Seq (Entry g f b)))
 linearSplit (p1,es1) (p2,es2) (e:<es) max
-    |length es1 == max  = ((p1,es1),(union (Left p2:< fmap entryPredicate (e:<es)),es2 <> (e:<es)))
+    |length es1 == max  = ((p1,es1),(union (Left p2 :< fmap entryPredicate (e:<es)),es2 <> (e:<es)))
     |length es2 == max  = ((union (Left p1:< fmap entryPredicate (e:<es)),es1 <> (e:<es)), (p2,es2))
     |otherwise         = if penalty (entryPredicate e) (Left $ p1) >
                             penalty (entryPredicate e) (Left $ p2)
@@ -153,7 +153,7 @@ linearSplit es1 es2 Empty _ = (es1,es2)
 pickSplitG
   :: (Predicates f ) =>
     Seq (Entry g f b) -> ((Node f ,Seq (Entry g f b)), (Node f,Seq (Entry g f b)))
-pickSplitG es = linearSplit (bound (entryPredicate e1),pure e1) (bound (entryPredicate e1),pure e2)  items len
+pickSplitG es = linearSplit (bound (entryPredicate e1),pure e1) (bound (entryPredicate e2),pure e2)  items len
         -- A tuple containing the two most disparate entries in the list their corresponding penalty penalty
         where (items, e1, e2) =  greatestPenaltyLinear es
               len = (S.length es + 1) `div` 2
@@ -161,5 +161,10 @@ pickSplitG es = linearSplit (bound (entryPredicate e1),pure e1) (bound (entryPre
 
 deleteAt ix s = h <> S.drop 1 t
   where (h,t) = S.splitAt ix  s
+
+instance (Show (Node p),Show p) => Show (GiST p a ) where
+  show (Node  l ) = "N" ++ " [" ++ L.intercalate "," ( F.toList  $ fmap (\(g,p) ->   show p ++ " -> ("  ++ show g ++ ")") l) ++ "]"
+  show (Leaf  l ) =  "L" ++" [" ++ L.intercalate "," (  F.toList  $fmap (\(g,p) ->   show p  ) l) ++ "]"
+  show Null = "N"
 
 

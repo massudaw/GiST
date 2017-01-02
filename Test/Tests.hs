@@ -5,30 +5,31 @@ module Test where
 
 import Data.GiST.GiST
 import Data.List(sort)
+import qualified Data.Foldable as F
 import qualified Data.GiST.BTree as BTree
-import qualified Data.GiST.RTree as RTree
+-- import qualified Data.GiST.RTree as RTree
 -- | A small series of tests on the functionality of the GiST
 
 bounds = (2,5)
 -- empty GiST
 
-bg1 = empty::GiST (BTree.Predicate Int) Int
+bg1 = empty::GiST Int Int
 -- some elements added
-bg2 = insert (50, BTree.Equals 50) bounds $ insert (32, BTree.Equals 32) bounds $ insert (7, BTree.Equals 7) bounds $  insert (16, BTree.Equals 16) bounds $ insert (85, BTree.Equals 85) bounds $ insert (63, BTree.Equals 63) bounds $ insert (42, BTree.Equals 42) bounds $ insert (98, BTree.Equals 98) bounds $ insert (25, BTree.Equals 25) bounds $ insert (73, BTree.Equals 73) bounds $ insert (36, BTree.Equals 36) bounds $ insert (1, BTree.Equals 1) bounds $ insert (62, BTree.Equals 62) bounds bg1
+bg2 = insert (50,  50) bounds $ insert (32,  32) bounds $ insert (7,  7) bounds $  insert (16,  16) bounds $ insert (85,  85) bounds $ insert (63,  63) bounds $ insert (42,  42) bounds $ insert (98,  98) bounds $ insert (25,  25) bounds $ insert (73,  73) bounds $ insert (36,  36) bounds $ insert (1,  1) bounds $ insert (62,  62) bounds bg1
 -- search test
-bs1 = search (BTree.Equals 32) bg2
-bt1 = (sort bs1) == [36, 42, 50]
+bs1 = search ( 32) bg2
+-- bt1 = (sort bs1) == [36, 42, 50]
 -- search test 2
-bs2 = search (BTree.Contains (43,82)) bg2
-bt2 = (sort bs2) == [50, 62, 63, 73]
+bs2 = query (BTree.Contains (43,82)) bg2
+--bt2 = (sort bs2) == [50, 62, 63, 73]
 -- some elements deleted
-bg3 = delete (BTree.Equals 25) bounds $ delete (BTree.Equals 73) bounds $ delete (BTree.Equals 1) bounds bg2
+bg3 = delete ( 25) bounds $ delete ( 73) bounds $ delete ( 1) bounds bg2
 -- search test 3
-bs3 = search (BTree.Contains (20,45)) bg3
-bt3 = sort bs3 == [32, 36, 42]
+bs3 = query (BTree.Contains (20,45)) bg3
+--bt3 = sort bs3 == [32, 36, 42]
 -- test results
-b = [bt1,bt2,bt3]
-
+--b = [bt1,bt2,bt3]
+  {-
 --empty gist
 rg1 = empty:: GiST (RTree.Predicate (Int,Int)) (Int,Int)
 -- some elements added
@@ -48,20 +49,20 @@ rt3 = sort rs3 == [(45,36)]
 r = [rt1,rt2,rt3]
 
 
-
+-}
 main = do
-  print (testInsDel [0 :: Int ..100])
+  print (F.toList $ testInsDel [0 :: Int ..100])
   print (testInsUpdate [0 :: Int ..100])
 
 testIns s =
-   foldl (\ m  i-> insert (i, BTree.Equals i) (3,6) m) empty ( s)
+   foldl (\ m  i-> insert (i,  i) (3,6) m) empty ( s)
 testDel s  m =
-   foldl (\ m  i-> delete (BTree.Equals i) (3,6) m) m ( s)
+   foldl (\ m  i-> delete ( i) (3,6) m) m ( s)
 
 testUpdate f s  m =
-  foldl (\ m  i-> update (BTree.Equals i) f  m) m ( s)
+  foldl (\ m  i-> update ( i) f  m) m ( s)
 
 testInsDel l = testDel l $ testIns l
-testInsUpdate l = (testUpdate (+ (-1)) l $testUpdate (+1) l $ testIns l) == testIns l
+testInsUpdate l = F.toList (testUpdate (+ (-1)) l $testUpdate (+1) l $ testIns l) == F.toList (testIns l)
 
 

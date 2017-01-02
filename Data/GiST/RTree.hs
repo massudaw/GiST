@@ -49,14 +49,16 @@ instance Predicates (Predicate (Int,Int)) where
     -- A containment and equality predicate are consistent if the point represented by the latter
     -- is in the area described by former.
     -- Two equality predicates are consistent if they represent the same point
-    consistent (Contains t1) (( Contains t2)) = overlaps t1 t2
+                                                 {-consistent (Contains t1) (( Contains t2)) = overlaps t1 t2
     consistent (Equals (x,y)) (( Contains ((minx,maxy),(maxx,miny)))) = between x minx maxx && between y miny maxy
     consistent (Contains ((minx,maxy),(maxx,miny))) (( Equals (x,y))) = between x minx maxx && between y miny maxy
     consistent (Equals a1) (( Equals a2))           = a1 == a2
 
     -- | A union of predicates is a rectangle with the minimal x und maximal y coordinate of all predicates as the upper left corner
     -- and the maximal x and minimal y coordinate of all predicates as the lower right corner
-    union ps = Contains ((minx,maxy),(maxx,miny))
+    bound (Left i ) = i
+    bound (Right i ) = (i,i)
+      {-merge ((x,y),(l,m)) = Contains ((minx,maxy),(maxx,miny))
                 -- The minimum of all x interval minimums
         where   minx    = minimum $ fmap minxP ps
                 -- The maximum of all y interval maximums
@@ -65,12 +67,12 @@ instance Predicates (Predicate (Int,Int)) where
                 maxx    = maximum $ fmap maxxP ps
                 -- The minimum of all y interval minimums
                 miny    = minimum $ fmap minyP ps
-
+-}
     -- | Seperates the sorted list of entries into two halves using the linear split algorithm
 
     -- | The area increase of the second predicate after a union with the first
-    penalty p1 p2  =  area (union (S.fromList [p1,p2])) - area p2
-
+    penalty p1 p2  =  area (merge p1 p2) - area p2
+-}
 
 -- | The lower limit for the x coordinate of the predicate
 minxP :: Predicate (a,a) -> a

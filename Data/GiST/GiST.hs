@@ -115,7 +115,7 @@ insert (toIns, pred) (min,max) (Node es)
             -- The changed (and additional) subtree after insert
             insertSubtree = insertAndSplit minSubtree (min,max) (toIns,pred)
             -- The split of the node entries (in case of overpopulation)
-            ((p1,es1),(p2,es2)) =  pickSplit $ fmap NodeEntry newEs
+            ~((p1,es1),(p2,es2)) =  pickSplit $ fmap NodeEntry newEs
 
 insert (toIns, p) (min,max) (Leaf es)
         |not $ null $ search p (Leaf es) = Leaf es
@@ -125,7 +125,7 @@ insert (toIns, p) (min,max) (Leaf es)
             -- The new entries after insert
     where   newEs = (toIns, p):<es
             -- The split of the node entries (in case of overpopulation)
-            ((p1,es1),(p2,es2)) =  pickSplit $ fmap LeafEntry newEs
+            ~((p1,es1),(p2,es2)) =  pickSplit $ fmap LeafEntry newEs
 
 -- | Deletes a leaf entry from the tree, rebalancing the tree if necessary.
 -- Rebalancing is done to satisfy the minimum and maximum fill factor
@@ -184,8 +184,8 @@ insertAndSplit (Node es,p) (min,max) (toIns,pred)
 
 insertAndSplit (Leaf es,p) (min,max) (toIns,pred)
             |length newEs <= max  = Right (Leaf newEs,union $ fmap (Right .snd) newEs)
-            |otherwise = Left ((Leaf (fmap unLeafEntry es1), union $ fmap entryPredicate es1)
-                        ,(Leaf (fmap unLeafEntry es2), union $ fmap entryPredicate es2))
+            |otherwise = Left ((Leaf (fmap unLeafEntry es1), p1 )
+                        ,(Leaf (fmap unLeafEntry es2), p2))
             -- The optimal subtree to insert into
     where   newEs = ((toIns,pred) :< es)
             -- The split of the node entries (in case of overpopulation)
