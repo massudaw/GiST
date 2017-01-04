@@ -47,20 +47,12 @@ pattern Empty   <- (S.viewl -> S.EmptyL)  where Empty = S.empty
 pattern x :< xs <- (S.viewl -> x S.:< xs) where (:<)  = (S.<|)
 pattern xs :> x <- (S.viewr -> xs S.:> x) where (:>)  = (S.|>)
 
-pattern NEmpty :: () => Predicates p => Prefix p
-pattern NEmpty   <- (uncons -> Nothing ) where NEmpty = undefined
-
-pattern (:-) :: () => Predicates p => p -> Prefix p -> Prefix p
-pattern x :- xs <- (uncons -> Just (x ,xs))
-
 
 -- | The data structure used for building the GiST
 data GiST p a  = Leaf !(Seq (LeafEntry p a))       -- ^ leaf node
                | Node !(Seq (NodeEntry GiST p a))      -- ^ internal node
                | Null                       -- ^ a null GiST
                deriving (Functor,F.Foldable,T.Traversable,Generic)
-
-
 
 
 
@@ -87,9 +79,6 @@ type LeafEntry p a = (a, p )
 -- | A node entry has a predicate and a subtree
 type NodeEntry f p a = (f p a, Node p )
 
-data UnconsPred p
-  = NoPred
-  | UnconsPred (p,Prefix p)
 
 -- | The predicate class that can be instanced by the user to create new types
 -- of balanced search trees
@@ -99,7 +88,6 @@ class (Ord (Penalty p)) => Predicates p where
     type Query p
     data Prefix p
     -- | Checks if the given entry is consistent with a given predicate
-    uncons :: Prefix p -> Maybe (p,Prefix p)
     consistent  :: Either (Node p) p -> Either (Node p ) p -> Bool
     -- | Check if the given query is consistent with a given predicate
     match :: Query p -> Either (Node p) p -> Bool
@@ -114,6 +102,8 @@ class (Ord (Penalty p)) => Predicates p where
     -- Focus is on minimising the overlap between the splitted entries' predicates
     pickSplit :: Seq (Entry f p b) -> ((Node p,Seq (Entry f p b)), (Node p,Seq (Entry f p b)))
     pickSplit = pickSplitG
+    pickSplitN :: Seq (Entry f p b) -> Seq (Node p,Seq (Entry f p b))
+    chooseTree :: LeafEntry  p  b -> Seq (Entry f p b) -> (Entry f p b,Seq (Entry f p b))
 
 union :: Predicates p => Seq (Either (Node p) p) -> Node p
 union l  = case S.viewl l of
@@ -136,13 +126,13 @@ greatestPenaltyLinear es = (items,e1,e2)
 -- | Implementation of the linear split algorithm taking the minimal fill factor into account
 linearSplit :: (Predicates f  ) => (Node f,Seq (Entry g f b)) -> (Node f,Seq (Entry g f b)) ->
   Seq (Entry g f b) -> Int -> ((Node f ,Seq (Entry g f b)), (Node f ,Seq (Entry g f b)))
-linearSplit (p1,es1) (p2,es2) (e:<es) max
-    |length es1 == max  = ((p1,es1),(union (Left p2 :< fmap entryPredicate (e:<es)),es2 <> (e:<es)))
-    |length es2 == max  = ((union (Left p1:< fmap entryPredicate (e:<es)),es1 <> (e:<es)), (p2,es2))
+linearSplit a1@(p1,es1) a2@(p2,es2) (e:<es) max
+    |length es1 == max  = (a1,(union (Left p2 :< fmap entryPredicate (e:<es)),es2 <> (e:<es)))
+    |length es2 == max  = ((union (Left p1:< fmap entryPredicate (e:<es)),es1 <> (e:<es)), a2 )
     |otherwise         = if penalty (entryPredicate e) (Left $ p1) >
                             penalty (entryPredicate e) (Left $ p2)
-                            then linearSplit (p1,es1) u2 es max
-                            else linearSplit  u1 (p2,es2) es max
+                            then linearSplit a1 u2 es max
+                            else linearSplit u1 a2 es max
   where
     u1 = (merge (entryPredicate e ) (Left p1),e:<es1)
     u2 = (merge (entryPredicate e ) (Left p2),e:<es2)

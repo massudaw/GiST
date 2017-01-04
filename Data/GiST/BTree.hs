@@ -47,10 +47,8 @@ data Predicate a = Contains (a,a)                   -- ^ containment predicate (
 instance Predicates Int where
     type Penalty Int = Int
     type Query Int = Predicate Int
-    data Prefix Int = Pre [Int]
     type Node Int = (Int,Int)
 
-    uncons (Pre l)  = fmap (fmap Pre) $ L.uncons ( l)
     -- | Two containment predicates are consistent if the intervals they represent overlap
     -- A containment and equality predicate are consistent if the interval represented by the former contains the value of the latter
     -- Two equality predicates are consistent if they represent the same value
