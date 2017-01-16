@@ -22,7 +22,6 @@ representing an open interval, while the equality predicate is simply an interge
 
 module Data.GiST.BTree (
     Predicate (..)
-    ,Prefix(..)
     ,between
 ) where
 
@@ -61,8 +60,7 @@ instance Predicates Int where
 
     -- | A union of predicates is an interval spanning from the minimal
     -- to the maximal value of all the predicats
-    bound (Right i ) = (i,i)
-    bound (Left i ) = i
+    bound i  = (i,i)
     merge (Right i ) (Right j) = (min i j ,max i j)
     merge (Left (a,b) ) (Left (c,d)) = (min a c, max b d)
     merge (Right a ) (Left (c,d)) = (min a c, max a d)

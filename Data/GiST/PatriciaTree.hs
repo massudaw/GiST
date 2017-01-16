@@ -28,13 +28,10 @@ instance (Show a,Ord a )=>  Predicates [a] where
     = Common [a]
     deriving (Eq,Show,Ord)
   leaf (Common l ) =  l
-  split []  (Common [] ) =  Nothing
-  split i (Common l)
-    | i ==  l = Nothing
-    | take (length l) i /= l =   Nothing
-    | otherwise = Just $ drop (length l) i
   origin = Common []
-  splitPre i (Common j) =  (Common a ,(Common <$> b , Common <$> c))
+  splitPrefix i (Common l)
+    | i /= l && take (length l) i == l && not (L.null i) =  Right $ drop (length l) i
+  splitPrefix i (Common j) =  Left (Common a ,(Common <$> b , Common <$> c))
     where
       (a,(b,c)) = sp i j
       sp [] [] = ([],(Nothing,Nothing))
@@ -50,7 +47,7 @@ instance (Show a,Ord a )=>  Predicates [a] where
   consistent  (Right j) (Right i) = i == j
   consistent i j = error (show ("consistent" ,i,j))
   pickSplitN = pickPrefixSplit
-  chooseTree  = chooseListTree
+  chooseSubTree  = chooseListTree
 
 commonPrefix ::  Eq e  => [e] -> [e] -> [e]
 commonPrefix _ [] = []
@@ -88,16 +85,26 @@ pickPrefixSplit l =  (center,topValue,quadSplit center l)
 
 
 -- editEntryList :: Num b => (b,b) -> Entry f (b,b) a -> Entry f (b,b) a
-editEntryList c (LeafEntry (l,p) ) =  case p `split` c of
-                                        Just s -> Right $ LeafEntry (l, s )
-                                        Nothing -> Left l
+editEntryList c (LeafEntry (l,p) ) =  case p `splitPrefix` c of
+                                        Right s -> Right $ LeafEntry (l, s )
+                                        Left _ -> Left l
 editEntryList c (NodeEntry (l,p)) =  Right $ NodeEntry (l,p )
 
 
 listitems ::  [[Int]]
-listitems =  [[],[1,2,3],[6,5],[1,2,3,4],[1,2,3,4,5],[1,2,3,4,6],[1,2,3,4,5,9],[6,4],[9,4],[9,2]]
-fullList = foldl (\g -> uncurry (insertSplit conf g)) empty (zip listitems [0..])
-emptyList = scanl delete fullList (listitems) ++  scanl delete fullList (reverse listitems)
+-- listitems =  [[1,2,3],[6,5],[1,2,3,4],[1,2,3,4,5],[1,2,3,4,6],[1,2,3,4,5,9],[6,4],[9,4],[9,2]]
+--listitems =  [[1,2,3],[6,5],[1,2,3,4],[1,2,3,4,5],[1,2,3,4,6],[1,2,3,4,5,9],[6,4],[9,4],[9,2]]
+-- listitems = [[0],[1],[2],[3],[4],[],[]]
+-- listitems = [[-46],[-46,0],[0],[1],[2]]
+listitems = [[-84,0],[-84,1],[-84,2],[0],[-84,3],[-84,4]]
+fullList = scanl (\g -> uncurry (insertSplit conf g)) empty (zip listitems [0..])
+emptyList = scanl delete (last fullList) (listitems) ++ scanl delete (last fullList) (reverse listitems)
 
 addDeleteList :: [[Int]] -> Bool
 addDeleteList l = foldl delete (foldl (\g -> uncurry (insertSplit conf g)) empty (zip l [0..])) (reverse l) == (empty :: GiST [Int] Int)
+
+addSearch :: [[String]] -> Bool
+addSearch l = all (\(i,v) -> [v] == searchKey i (foldl (\g -> uncurry (insertSplit conf g)) empty (zip l [(0::Int)..]))) (L.nubBy (\i j -> fst i == fst j) $ reverse $ zip l [(0::Int) ..])
+
+putScan :: Show a => [a] -> IO ()
+putScan = putStrLn  . unlines . fmap show

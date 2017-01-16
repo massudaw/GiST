@@ -14,6 +14,7 @@ is simply a 2D point (tuple of two integers).
 -}
 
 
+
 {-# LANGUAGE MultiParamTypeClasses
     , TypeFamilies
     , FlexibleInstances
@@ -74,6 +75,21 @@ instance Predicates (Predicate (Int,Int)) where
     penalty p1 p2  =  area (merge p1 p2) - area p2
 -}
 
+
+penal p1 p2 = (m , fromIntegral d / 2 )
+  where u  = area p1 + area p2
+        d = u - m
+        m = area (merge [p1 ,p2])
+        merge ps = Contains ((minx,maxy),(maxx,miny))
+                -- The minimum of all x interval minimums
+          where   minx    = minimum $ fmap minxP ps
+                  -- The maximum of all y interval maximums
+                  maxy    = maximum $ fmap maxyP ps
+                  -- The maximum of all x interval maximums
+                  maxx    = maximum $ fmap maxxP ps
+                  -- The minimum of all y interval minimums
+                  miny    = minimum $ fmap minyP ps
+
 -- | The lower limit for the x coordinate of the predicate
 minxP :: Predicate (a,a) -> a
 minxP (Contains ((minx,_),(_,_))) = minx
@@ -97,7 +113,7 @@ minyP (Equals (_,y)) = y
 -- | Size of the area covered by the predicate
 area :: Predicate (Int,Int) -> Int
 area (Equals _) = 0
-area (Contains ((minx,maxy),(maxx,miny))) = (maxx - minx) * (maxy - miny)
+area (Contains ((minx,miny),(maxx,maxy))) = (maxx - minx) * (maxy - miny)
 
 
 

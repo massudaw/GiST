@@ -22,4 +22,9 @@ library
     build-depends:      base >=4 && <5 , text  ,random , data-interval,semigroups,containers,deepseq,QuickCheck
     exposed-modules:    Data.GiST.GiST,
                         Data.GiST.BTree
+                        Data.GiST.RTree
+                        Data.GiST.SPGiST
+                        Data.GiST.PatriciaTree
+                        Data.GiST.QuadTree
+
     other-modules:      Data.GiST.Types

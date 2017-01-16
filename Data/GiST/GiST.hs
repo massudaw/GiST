@@ -109,9 +109,9 @@ insert (toIns, pred) (min,max) (Node es)
             -- The new entries after inserting
     where   newEs = case insertSubtree of
                         Right newSub -> S.adjust (const newSub) ix es
-                        Left split -> notMinTree <> S.fromList [fst split,snd split]
+                        Left split -> S.deleteAt ix es <> S.fromList [fst split,snd split]
             -- The optimal subtree to insert into
-            (minSubtree ,~(notMinTree,ix))= chooseSubtree es (toIns,pred)
+            (minSubtree ,ix)= chooseSubtree es pred
             -- The changed (and additional) subtree after insert
             insertSubtree = insertAndSplit minSubtree (min,max) (toIns,pred)
             -- The split of the node entries (in case of overpopulation)
@@ -174,9 +174,9 @@ insertAndSplit (Node es,p) (min,max) (toIns,pred)
                 -- The new entries after insert
         where   newEs = case insertSubtree of
                           Right newSub -> S.adjust (const newSub) minIdx es
-                          Left split -> notMinTree <> S.fromList [fst split,snd split]
+                          Left split -> S.deleteAt minIdx es <> S.fromList [fst split,snd split]
                 -- The optimal subtree to insert into
-                (minSubtree ,~(notMinTree,minIdx))= chooseSubtree es (toIns,pred)
+                (minSubtree ,minIdx)= chooseSubtree es (pred)
                 -- The changed (and additional) subtree after insert
                 insertSubtree = insertAndSplit minSubtree (min,max) (toIns,pred)
                 -- The split of the node entries (in case of overpopulation)
@@ -227,10 +227,6 @@ insertMultiple (e:<es) gist (min,max) = insertMultiple es afterInsert (min,max)
 
 
 -- Chooses the most appropriate subtree to insert the entry into
-chooseSubtree   :: Predicates p  =>Seq (NodeEntry GiST p a) -> LeafEntry p a -> (NodeEntry GiST p a,(Seq (NodeEntry GiST p a),Int))
-chooseSubtree subtrees e  = fst  $ minimumBy (comparing (\(~(_,p))-> p)) $ penalties
-  where   penalties = S.mapWithIndex (\k ne -> ((ne,(deleteAt k subtrees,k)), penalty (Right $ snd e) (Left $ snd ne)) ) subtrees
-
 
 -- Takes an entry and extracts the GiST from it
 makeRoot :: NodeEntry GiST p a -> GiST p a

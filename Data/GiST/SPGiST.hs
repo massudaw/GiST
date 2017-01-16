@@ -44,11 +44,10 @@ class Predicates p where
     origin :: Node p
     -- lift node to predicate
     leaf :: Node p -> p
-    node ::  p -> Node p
-    -- Split node predicate
-    split :: p -> Node p -> Maybe p
-    splitPre :: p -> Node p -> (Node p,(Maybe (Node p ) , Maybe (Node p)))
+    -- append two prefixes
     append :: Node p -> Node p -> Node p
+    -- Split predicate with node
+    splitPrefix :: p -> Node p -> Either (Node p,(Maybe (Node p ) , Maybe (Node p))) p
 
     type Query p
     -- | Checks if the given entry is consistent with a given predicate
@@ -58,14 +57,13 @@ class Predicates p where
     -- | Check if the given query is consistent with a given predicate
     match :: Query p -> Either (Node p) p -> Bool
     -- | Returns a predicate that is the union of all predicates of the given list of entries
-    merge :: Either (Node p) p -> Either (Node p) p -> Node p
 
     -- | Calculates a numerical penalty for inserting the entry containing the first predicate
     -- into a subtree rooted at an entry containing the second predicate
     -- | Given a list of entries, returns two disjunct subsets that contain the entries in the list.
     -- Focus is on minimising the overlap between the splitted entries' predicates
     pickSplitN :: Seq (Entry f p b) -> (Node p ,Maybe b ,Seq (Node p,Maybe b,Seq (Entry f p b)))
-    chooseTree :: p -> GiST p b -> Maybe Int
+    chooseSubTree :: p ->  b -> GiST p b -> Either (GiST p b) Int
 
 
 -- | A general entry type for the gist
@@ -106,17 +104,17 @@ prefix (Node p _ _ ) = p
 searchKey  :: (Show p , Show a ,Predicates p ) => p -> GiST p a -> [a]
 -- searchKey  i j | traceShow (i,j) False = undefined
 searchKey  p (Leaf pre m es)
-  | isNothing psm = maybeToList m
+  | isLeft psm = maybeToList m
   | otherwise =  fmap fst $ F.toList $ S.filter (consistent (Right ps) . Right . snd ) es
   where
-    psm@(Just ps) = split p pre
+    psm@(~(Right ps)) = splitPrefix p pre
 searchKey  p (Node pre  m  es)
-  | isNothing psm = maybeToList m
+  | isLeft psm = maybeToList m
   | otherwise =  concat $ F.toList $ fmap (\e -> if consistent (Right ps) (Left $ prefix e)
            then searchKey ps e
            else [] ) es
   where
-    psm@(Just ps) = split p pre
+    psm@(~(Right ps)) = splitPrefix p pre
 searchKey _ (Node _ _ Empty) = []
 
 
@@ -146,10 +144,10 @@ filterJust = fmap fromJust . S.filter isJust
 delete :: Predicates p =>  GiST p a -> p -> GiST p a
 -- delete n p | traceShow  (n,p) False = undefined
 delete (Node pre m n) pr
-  | isNothing psm  = Node pre Nothing n
+  | isLeft psm  = Node pre Nothing n
   | otherwise = collapse
   where
-    psm@(~(Just ps)) = split pr pre
+    psm@(~(Right ps)) = splitPrefix pr pre
     matched = (\po -> if consistent (Right ps ) (treePred po) then Right po else Left po ) <$> n
     newMatched = either id (\i -> delete i ps  ) <$> matched
     nonEmpty = S.filter (\i -> not (isNull (i))) newMatched
@@ -169,10 +167,10 @@ delete (Node pre m n) pr
                         then merge (S.index notEmptyNull 0)
                         else Node pre m  notEmptyNull
 delete (Leaf pre m n) p
-  | isNothing psm = Leaf pre Nothing n
+  | isLeft psm = if S.null  n then empty else Leaf pre Nothing n
   | otherwise =newPrefix
   where
-    psm@(~(Just ps)) = split  p pre
+    psm@(~(Right ps)) = splitPrefix  p pre
     matched = (\po -> if consistent (Right ps ) (Right $ snd po) then Nothing else Just po ) <$> n
     allCons = all isNothing matched
     newMatched = fmap fromJust $ S.filter isJust matched
@@ -181,36 +179,39 @@ delete (Leaf pre m n) p
                    else Leaf pre m newMatched
 
 
+fromLeft (Left i) = i
+fromRight (Right i)  = i
 
 
 insertSplit :: Predicates p => SPGistConfig  -> GiST p a -> p -> a -> GiST p a
 insertSplit c no@(Node prefix m n ) pr v
-  | isNothing psm = if isNothing npr
-                       then Node ssp (Just v) (pure no)
+  = case splitPrefix pr prefix of
+      Left (ssp,(npr,nprefix)) ->  if isNothing npr
+                       then if isJust nprefix then Node ssp (Just v) (pure no) else Node  prefix (Just v) n
                        else Node ssp Nothing (S.fromList [Node (fromJust nprefix) m n,Leaf origin Nothing (pure (v,leaf $ fromJust npr))])
-  | otherwise = newPrefix
-  where
-    psm@(~(Just token ))= split pr prefix
-    (ssp ,(npr,nprefix)) = splitPre pr prefix
-    new =  insertSplit c empty token v
-    newMatched = S.adjust (\n -> insertSplit c n token v ) (fromJust matched) n
-    matched = chooseTree pr no
-    anyCons = isJust matched
-    newPrefix = if anyCons  then (Node prefix m newMatched ) else (Node prefix m $n :> new)
+      Right token ->
+           let
+            -- new =  insertSplit c empty token v
+            newMatched = S.adjust (\n -> insertSplit c n token v ) (fromRight matched) n
+            matched = chooseSubTree pr v no
+            anyCons = isRight matched
+            newPrefix = if anyCons  then (Node prefix m newMatched ) else (Node prefix m $n :> fromLeft matched)
+           in newPrefix
 
 insertSplit c (Leaf pre da l) p v
-  | isNothing psm = if isNothing npr
+  = case splitPrefix p pre of
+      Left  (ssp ,(npr,nprefix)) -> if isNothing npr
                        then Leaf pre (Just v) l
                        else Node ssp Nothing (S.fromList [Leaf (fromJust nprefix) da l,Leaf origin Nothing (pure (v,leaf $ fromJust npr))])
-  | spacePartitions  c < length newNodes  && anyCons = Node prefix vn (fmap (\(p,v,s) -> Leaf p v (fmap unLeafEntry s) ) n)
-  | otherwise = Leaf pre da newNodes
- where (prefix,vn,n) = pickSplitN (fmap LeafEntry newNodes)
-       (ssp ,(npr,nprefix)) = splitPre p pre
-       newNodes = if anyCons then (either id id <$> cons) else (v,token) :< l
-       cons = (\po -> if consistent (Right token ) (Right $ snd po) then (Right po ) else (Left po) )  <$> l
-       anyCons = any isRight cons
-       psm@(~(Just  token ))= split p pre
-
+      Right token ->
+        let
+          (prefix,vn,n) = pickSplitN (maybe id (\i -> (:> (LeafEntry (i,leaf origin)))) da $ fmap LeafEntry newNodes)
+          newNodes = if anyCons then (either id id <$> cons) else (v,token) :< l
+          cons = (\po -> if consistent (Right token ) (Right $ snd po) then (Right (v,snd po)) else (Left po) )  <$> l
+          anyCons = any isRight cons
+       in if spacePartitions  c < length newNodes
+           then Node (append pre prefix) vn (fmap (\(p,v,s) -> Leaf p v (fmap unLeafEntry s) ) n)
+           else Leaf pre da newNodes
 
 {-
 makeLeaf n (token :- NEmpty )  =  Leaf token (Just n) S.empty
@@ -250,6 +251,6 @@ groupBy _  Empty           =  Empty
 groupBy eq (x:<xs)       =  (x:<ys) :< groupBy eq zs
                            where (ys,zs) = S.spanl (eq x) xs
 
-conf = (SPGistConfig NeverShrink 20 4)
+conf = (SPGistConfig NeverShrink 4 4)
 
 opbi f l  i j = f (l i ) (l j)

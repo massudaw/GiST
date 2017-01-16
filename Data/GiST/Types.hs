@@ -86,13 +86,12 @@ class (Ord (Penalty p)) => Predicates p where
     type Penalty p
     type Node p
     type Query p
-    data Prefix p
     -- | Checks if the given entry is consistent with a given predicate
     consistent  :: Either (Node p) p -> Either (Node p ) p -> Bool
     -- | Check if the given query is consistent with a given predicate
     match :: Query p -> Either (Node p) p -> Bool
     -- | Returns a predicate that is the union of all predicates of the given list of entries
-    bound :: Either (Node p) p -> Node p
+    bound :: p -> Node p
     merge :: Either (Node p) p -> Either (Node p) p -> Node p
 
     -- | Calculates a numerical penalty for inserting the entry containing the first predicate
@@ -102,13 +101,20 @@ class (Ord (Penalty p)) => Predicates p where
     -- Focus is on minimising the overlap between the splitted entries' predicates
     pickSplit :: Seq (Entry f p b) -> ((Node p,Seq (Entry f p b)), (Node p,Seq (Entry f p b)))
     pickSplit = pickSplitG
-    pickSplitN :: Seq (Entry f p b) -> Seq (Node p,Seq (Entry f p b))
-    chooseTree :: LeafEntry  p  b -> Seq (Entry f p b) -> (Entry f p b,Seq (Entry f p b))
+    pickSplitN :: Seq (Entry f p b) -> (Node p ,Maybe b ,Seq (Node p,Maybe b,Seq (Entry f p b)))
+
+    chooseSubtree  :: Seq (NodeEntry GiST p a) -> p  -> (NodeEntry GiST p a,Int)
+    chooseSubtree = chooseSubtreePenalty
 
 union :: Predicates p => Seq (Either (Node p) p) -> Node p
 union l  = case S.viewl l of
-    i S.:< ps -> F.foldl' (\i l-> merge (Left i) l ) (bound i) ps
+             i S.:< ps -> F.foldl' (\i l-> merge (Left i) l ) (either id bound i) ps
 {-# INLINE union #-}
+
+chooseSubtreePenalty :: Predicates p  =>Seq (NodeEntry GiST p a) -> p  -> (NodeEntry GiST p a,Int)
+chooseSubtreePenalty subtrees e  = fst  $ minimumBy (comparing (\(~(_,p))-> p)) $ penalties
+  where   penalties = S.mapWithIndex (\k ne -> ((ne,k), penalty (Right $ e) (Left $ snd ne)) ) subtrees
+
 
 greatestPenaltyLinear :: (Predicates f  ) => Seq (Entry g f b) -> (Seq (Entry g f b) , Entry g f b, Entry g f b)
 greatestPenaltyLinear es = (items,e1,e2)
@@ -143,7 +149,7 @@ linearSplit es1 es2 Empty _ = (es1,es2)
 pickSplitG
   :: (Predicates f ) =>
     Seq (Entry g f b) -> ((Node f ,Seq (Entry g f b)), (Node f,Seq (Entry g f b)))
-pickSplitG es = linearSplit (bound (entryPredicate e1),pure e1) (bound (entryPredicate e2),pure e2)  items len
+pickSplitG es = linearSplit (either id bound (entryPredicate e1),pure e1) (either id bound (entryPredicate e2),pure e2)  items len
         -- A tuple containing the two most disparate entries in the list their corresponding penalty penalty
         where (items, e1, e2) =  greatestPenaltyLinear es
               len = (S.length es + 1) `div` 2
