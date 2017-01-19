@@ -109,7 +109,7 @@ insert (toIns, pred) (min,max) (Node es)
             -- The new entries after inserting
     where   newEs = case insertSubtree of
                         Right newSub -> S.adjust (const newSub) ix es
-                        Left split -> S.deleteAt ix es <> S.fromList [fst split,snd split]
+                        Left split -> deleteAt ix es <> S.fromList [fst split,snd split]
             -- The optimal subtree to insert into
             (minSubtree ,ix)= chooseSubtree es pred
             -- The changed (and additional) subtree after insert
@@ -174,7 +174,7 @@ insertAndSplit (Node es,p) (min,max) (toIns,pred)
                 -- The new entries after insert
         where   newEs = case insertSubtree of
                           Right newSub -> S.adjust (const newSub) minIdx es
-                          Left split -> S.deleteAt minIdx es <> S.fromList [fst split,snd split]
+                          Left split -> deleteAt minIdx es <> S.fromList [fst split,snd split]
                 -- The optimal subtree to insert into
                 (minSubtree ,minIdx)= chooseSubtree es (pred)
                 -- The changed (and additional) subtree after insert
