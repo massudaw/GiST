@@ -20,6 +20,7 @@ which define the data stored in the tree and the tree's behavior during insert, 
     ,DeriveFoldable
     ,DeriveTraversable
     ,DeriveGeneric
+    ,StandaloneDeriving
     ,FlexibleContexts
     ,ViewPatterns
     ,PatternSynonyms
@@ -56,6 +57,9 @@ data GiST p a  = Leaf !(Seq (LeafEntry p a))       -- ^ leaf node
                deriving (Functor,F.Foldable,T.Traversable,Generic)
 
 
+deriving instance  (Eq (Node p ),Eq p ,Eq a )=>  Eq (GiST p a)
+deriving instance  (Ord (Node p ),Ord p ,Ord a )=>  Ord (GiST p a)
+deriving instance  (Show (Node p ),Show p ,Show a )=>  Show (GiST p a)
 
 
 -- | A general entry type for the gist
@@ -159,10 +163,10 @@ pickSplitG es = linearSplit (either id bound (entryPredicate e1),pure e1) (eithe
 
 deleteAt ix s = h <> S.drop 1 t
   where (h,t) = S.splitAt ix  s
-
+        {-
 instance (Show (Node p),Show p) => Show (GiST p a ) where
   show (Node  l ) = "N" ++ " [" ++ L.intercalate "," ( F.toList  $ fmap (\(g,p) ->   show p ++ " -> ("  ++ show g ++ ")") l) ++ "]"
   show (Leaf  l ) =  "L" ++" [" ++ L.intercalate "," (  F.toList  $fmap (\(g,p) ->   show p  ) l) ++ "]"
   show Null = "N"
-
+-}
 

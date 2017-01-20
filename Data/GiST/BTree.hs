@@ -25,12 +25,14 @@ module Data.GiST.BTree (
     ,between
 ) where
 
-import Data.GiST.GiST(Entry(..),entryPredicate,Predicates(..),Penalty,union)
+import Data.GiST.GiST
 import Data.List(sort,sortBy)
 import qualified Data.List as L
 import Data.Monoid
 import Data.Semigroup
+import Test.QuickCheck
 import Data.Foldable
+import Debug.Trace
 import Data.Ord
 
 import qualified Data.Sequence as S
@@ -51,6 +53,7 @@ instance Predicates Int where
     -- | Two containment predicates are consistent if the intervals they represent overlap
     -- A containment and equality predicate are consistent if the interval represented by the former contains the value of the latter
     -- Two equality predicates are consistent if they represent the same value
+    -- consistent  i j | traceShow (i,j) False = undefined
     consistent (Left (min1,max1)) (Left (min2,max2) ) = (min1 <= max2) && (max1 >= min2)
     consistent (Right  a) (Left (min,max)) = between a min max
     consistent  (Left (min,max)) (Right  a)= between a min max
@@ -91,3 +94,24 @@ pattern xs :> x <- (S.viewr -> xs S.:> x) where (:>)  = (S.|>)
 -- | Tests if a value is between two others
 between :: Ord a => a -> a -> a -> Bool
 between a min max = (a >= min) && (a <= max)
+
+
+addDeleteList :: [Int] -> Bool
+addDeleteList l = foldl (\g i -> delete i (3,6) g) (foldl (\g i  -> insert   i (3,6) g) empty (zip  [0..] l)) (reverse l) == (empty :: GiST Int Int)
+
+addSearch :: [Int] -> Bool
+addSearch l = all (\(v,i) -> [v] == search i (foldl (\g  i -> insert  i (3,6) g) empty (zip  [(0::Int)..] l))) (L.nubBy (\i j -> snd i == snd j) $ reverse $ zip  [(0::Int) ..] l)
+
+
+
+listitems ::  [Int]
+--listitems = [1,1]
+--listitems = [0,1,7,7,2,2,7]
+--listitems = [0,1,2,3,4,5,6,0]
+listitems = [3,5,0,4,1,2,6,0]
+fullList,emptyList :: [GiST Int Int]
+fullList = scanl (\g i -> insert i (3,6) g) empty (zip [0..] listitems )
+emptyList = scanl (\ g i -> delete i (3,6) g)(last fullList) (listitems) ++ scanl (\g i -> delete  i (3,6) g) (last fullList) (reverse listitems)
+searchList = fmap (\(i,v) -> (i,v,   [v]== search i (last fullList ),   search i (last fullList )) ) (L.nubBy (\i j -> fst i == fst j) $ reverse $ zip listitems [(0::Int) ..])
+
+

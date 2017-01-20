@@ -35,7 +35,7 @@ module Data.GiST.GiST
         ,union
         ,getEntries
         -- ** GiST operations
-    ,query,update,alter ,search,searchKey, insert, delete, empty,  getData, size
+    ,query,update,alter ,search,searchKey, insert, delete, empty,  getData, size,putScan
     ) where
 
 import Data.GiST.Types
@@ -45,6 +45,7 @@ import qualified Data.Text as T
 import Data.List (null,minimumBy)
 import Data.Ord (comparing)
 import GHC.Stack
+import Debug.Trace
 import Data.Monoid
 import qualified Data.Sequence as S
 import qualified Data.Foldable as F
@@ -102,8 +103,7 @@ search p = fmap fst . searchKey p
 -- of the tree (represented as an integer tuple)
 insert  :: Predicates p  => LeafEntry p a -> (Int, Int) -> GiST p a -> GiST p a
 insert (toIns, pred) (min,max) (Node es)
-        |not $ null $ search pred (Node es) = Node es
-        |length newEs <= max   =  Node newEs
+        |length newEs <= max || not ( null $ search pred (Node es))  =  Node newEs
         |otherwise              = Node $ first (Node .fmap unNodeEntry ) <$>  splitS
             -- The new entries after inserting
     where   newEs = case insertSubtree of
@@ -117,7 +117,7 @@ insert (toIns, pred) (min,max) (Node es)
             splitS =  pickSplit $ fmap NodeEntry newEs
 
 insert (toIns, p) (min,max) (Leaf es)
-        |not $ null $ search p (Leaf es) = Leaf es
+        |not $ null $ search p (Leaf es) = Leaf (fmap (\(i,j) -> if consistent (Right j) (Right p) then (toIns ,j) else  (i,j) )es)
         |length newEs <= max    = Leaf newEs
         |otherwise              = Node $ first (Leaf .fmap unLeafEntry ) <$>  splitS
             -- The new entries after insert
@@ -131,8 +131,8 @@ insert (toIns, p) (min,max) (Leaf es)
 delete  :: Predicates p  => p  -> (Int, Int) -> GiST p a -> GiST p a
 delete p (min,max) (Node es)
         | length newEs == 0 = insertMultiple toAdd empty (min,max)
-        | length newEs == 1  = insertMultiple toAdd (makeRoot $ head $ F.toList newEs) (min,max)
-        | otherwise          = insertMultiple toAdd (Node newEs) (min, max)
+        | length newEs == 1 = insertMultiple toAdd (makeRoot $ head $ F.toList newEs) (min,max)
+        | otherwise        = insertMultiple toAdd (Node newEs) (min, max)
             -- The new entries after delete without Null entries
     where   newEs = S.filter (not.isNull) (fmap fst delNodes)
             -- The propagated entries to add
@@ -143,7 +143,7 @@ delete p (min,max) (Node es)
                             else (e,Empty)
                         )es
 
-delete p (min,max) (Leaf es) = Leaf $ S.filter ( consistent (Right p) . Right . snd ) es
+delete p (min,max) (Leaf es) = Leaf $ S.filter ( not . consistent (Right p) . Right . snd ) es
 
 -- | Create a new empty GiST
 empty :: GiST p a
@@ -173,13 +173,14 @@ insertAndSplit (Node es,p) (min,max) (toIns,pred)
                           Right newSub -> S.adjust (const newSub) minIdx es
                           Left split -> deleteAt minIdx es <> split
                 -- The optimal subtree to insert into
-                (minSubtree ,minIdx)= chooseSubtree es (pred)
+                (minSubtree ,minIdx)= chooseSubtree es pred
                 -- The changed (and additional) subtree after insert
                 insertSubtree = insertAndSplit minSubtree (min,max) (toIns,pred)
                 -- The split of the node entries (in case of overpopulation)
                 splitS =  pickSplit $ fmap NodeEntry newEs
 
 insertAndSplit (Leaf es,p) (min,max) (toIns,pred)
+            |not $ null $ search pred (Leaf es) = Right ( Leaf (fmap (\(i,j) -> if consistent (Right j) (Right pred) then (toIns ,j) else  (i,j) )es),p)
             |length newEs <= max  = Right (Leaf newEs,union $ fmap (Right .snd) newEs)
             |otherwise = Left $ first (Leaf .fmap unLeafEntry ) <$> splitS
             -- The optimal subtree to insert into
@@ -255,3 +256,5 @@ size gist = length $ getEntries gist
 
 
 
+putScan :: Show a => [a] -> IO ()
+putScan = putStrLn  . unlines . fmap show
