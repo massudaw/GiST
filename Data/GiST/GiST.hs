@@ -104,28 +104,26 @@ insert  :: Predicates p  => LeafEntry p a -> (Int, Int) -> GiST p a -> GiST p a
 insert (toIns, pred) (min,max) (Node es)
         |not $ null $ search pred (Node es) = Node es
         |length newEs <= max   =  Node newEs
-        |otherwise              = Node $ S.fromList [(Node $  fmap unNodeEntry es1, p1 )
-                                                    ,(Node $ fmap unNodeEntry es2, p2 )]
+        |otherwise              = Node $ first (Node .fmap unNodeEntry ) <$>  splitS
             -- The new entries after inserting
     where   newEs = case insertSubtree of
                         Right newSub -> S.adjust (const newSub) ix es
-                        Left split -> deleteAt ix es <> S.fromList [fst split,snd split]
+                        Left split -> deleteAt ix es <> split
             -- The optimal subtree to insert into
             (minSubtree ,ix)= chooseSubtree es pred
             -- The changed (and additional) subtree after insert
             insertSubtree = insertAndSplit minSubtree (min,max) (toIns,pred)
             -- The split of the node entries (in case of overpopulation)
-            ~((p1,es1),(p2,es2)) =  pickSplit $ fmap NodeEntry newEs
+            splitS =  pickSplit $ fmap NodeEntry newEs
 
 insert (toIns, p) (min,max) (Leaf es)
         |not $ null $ search p (Leaf es) = Leaf es
         |length newEs <= max    = Leaf newEs
-        |otherwise              = Node $ S.fromList [(Leaf $ fmap unLeafEntry es1,p1 )
-                                                    ,(Leaf $ fmap unLeafEntry es2, p2 )]
+        |otherwise              = Node $ first (Leaf .fmap unLeafEntry ) <$>  splitS
             -- The new entries after insert
     where   newEs = (toIns, p):<es
             -- The split of the node entries (in case of overpopulation)
-            ~((p1,es1),(p2,es2)) =  pickSplit $ fmap LeafEntry newEs
+            splitS =  pickSplit $ fmap LeafEntry newEs
 
 -- | Deletes a leaf entry from the tree, rebalancing the tree if necessary.
 -- Rebalancing is done to satisfy the minimum and maximum fill factor
@@ -166,30 +164,28 @@ save gist f = TIO.writeFile f $ T.pack (show gist)
 -- | A helper function that propagates insertion through the subtrees and splits when necessary.
 -- If the node is overpopulated after the insertion, the node is split into
 -- two smaller nodes which are then added to the parent
-insertAndSplit :: Predicates p  => NodeEntry GiST p a -> (Int,Int) -> LeafEntry p a -> Either (NodeEntry GiST p a, NodeEntry GiST p a) (NodeEntry GiST p a)
+insertAndSplit :: Predicates p  => NodeEntry GiST p a -> (Int,Int) -> LeafEntry p a -> Either (Seq (NodeEntry GiST p a))  (NodeEntry GiST p a)
 insertAndSplit (Node es,p) (min,max) (toIns,pred)
             |length newEs <= max  =  Right (Node newEs,union $ fmap treePred newEs)
-            |otherwise = Left ((Node  (fmap unNodeEntry es1),  p1 )
-                              ,(Node (fmap unNodeEntry es2), p2 ))
+            |otherwise = Left $ first (Node .fmap unNodeEntry) <$> splitS
                 -- The new entries after insert
         where   newEs = case insertSubtree of
                           Right newSub -> S.adjust (const newSub) minIdx es
-                          Left split -> deleteAt minIdx es <> S.fromList [fst split,snd split]
+                          Left split -> deleteAt minIdx es <> split
                 -- The optimal subtree to insert into
                 (minSubtree ,minIdx)= chooseSubtree es (pred)
                 -- The changed (and additional) subtree after insert
                 insertSubtree = insertAndSplit minSubtree (min,max) (toIns,pred)
                 -- The split of the node entries (in case of overpopulation)
-                ~(~(p1,es1),~(p2,es2)) =  pickSplit $ fmap NodeEntry newEs
+                splitS =  pickSplit $ fmap NodeEntry newEs
 
 insertAndSplit (Leaf es,p) (min,max) (toIns,pred)
             |length newEs <= max  = Right (Leaf newEs,union $ fmap (Right .snd) newEs)
-            |otherwise = Left ((Leaf (fmap unLeafEntry es1), p1 )
-                        ,(Leaf (fmap unLeafEntry es2), p2))
+            |otherwise = Left $ first (Leaf .fmap unLeafEntry ) <$> splitS
             -- The optimal subtree to insert into
     where   newEs = ((toIns,pred) :< es)
             -- The split of the node entries (in case of overpopulation)
-            ~(~(p1,es1),~(p2,es2)) =  pickSplit $ fmap LeafEntry newEs
+            splitS =  pickSplit $ fmap LeafEntry newEs
 
 
 -- A helper function that propagates deletion through the subtrees and condenses.
@@ -220,9 +216,7 @@ deleteAndCondense ((Leaf es),pred) (min, max) p
 
 -- Inserts multiple entries into a GiST
 insertMultiple :: (Predicates p ) => Seq (LeafEntry p a) -> GiST p a -> (Int,Int) -> GiST p a
-insertMultiple Empty gist _ = gist
-insertMultiple (e:<es) gist (min,max) = insertMultiple es afterInsert (min,max)
-    where afterInsert = insert e (min,max) gist
+insertMultiple es gist (min,max) = F.foldl' (\ gist e-> insert  e (min,max) gist) gist  es
 
 
 

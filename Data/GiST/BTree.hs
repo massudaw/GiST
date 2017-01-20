@@ -66,7 +66,7 @@ instance Predicates Int where
     merge (Right a ) (Left (c,d)) = (min a c, max a d)
     merge  (Left (c,d)) (Right a )= (min a c, max a d)
 
-    pickSplit es = ((union (entryPredicate <$> l) ,l),(union (entryPredicate <$> l),j))
+    pickSplit es = S.fromList [(l,union (entryPredicate <$> l) ),(j,union (entryPredicate <$> j))]
         where
           (l,j)  = S.splitAt ((length es + 1) `div` 2) sorted
           sorted  = S.sortBy (comparing entryPredicate) es

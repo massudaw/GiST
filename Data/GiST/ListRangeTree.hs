@@ -64,7 +64,7 @@ minmaxPrefix (x@(x1,x2,xc):xs) (y@(y1,y2,yc):ys)
   = (min x1 y1 , max x2 y2,xc+yc) : minmaxPrefix xs ys
 
 
-prefixList :: (Show a,Ord a) => Seq [a] -> Node [a]
+prefixList :: (Show a , Ord a) => Seq [a] -> Node [a]
 prefixList il =   stripCommon . F.foldl1 (\i j ->  minmaxPrefix i j)  . dupPrefix $ il
   where dupPrefix :: Seq [a] -> Seq [(a,a,Int)]
         dupPrefix = fmap (fmap (\i -> (i,i,1)))

@@ -32,6 +32,7 @@ import Data.Foldable as F
 import Data.Monoid
 import Control.Monad (join)
 import Control.DeepSeq
+import Data.Tuple (swap)
 import GHC.Generics
 import Data.Traversable as T
 import Data.Ord
@@ -99,8 +100,9 @@ class (Ord (Penalty p)) => Predicates p where
     penalty  :: Either (Node p) p -> Either (Node p ) p  -> Penalty p
     -- | Given a list of entries, returns two disjunct subsets that contain the entries in the list.
     -- Focus is on minimising the overlap between the splitted entries' predicates
-    pickSplit :: Seq (Entry f p b) -> ((Node p,Seq (Entry f p b)), (Node p,Seq (Entry f p b)))
-    pickSplit = pickSplitG
+    pickSplit :: Seq (Entry f p b) -> Seq (Seq (Entry f p b),Node p)
+    pickSplit l =  S.fromList [swap a,swap b]
+      where (a,b) = pickSplitG l
     pickSplitN :: Seq (Entry f p b) -> (Node p ,Maybe b ,Seq (Node p,Maybe b,Seq (Entry f p b)))
 
     chooseSubtree  :: Seq (NodeEntry GiST p a) -> p  -> (NodeEntry GiST p a,Int)
