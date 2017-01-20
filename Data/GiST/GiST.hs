@@ -148,16 +148,6 @@ delete p (min,max) (Leaf es) = Leaf $ S.filter ( not . consistent (Right p) . Ri
 -- | Create a new empty GiST
 empty :: GiST p a
 empty = Leaf Empty
-  {-
--- | Loads a GiST from file
-load :: (Read a, Read p ) => FilePath -> IO (GiST p a)
-load f = do s <- TIO.readFile f
-            return (read $ T.unpack s)
-
--- | Saves the GiST to file
-save :: (Show a, Show p ) => GiST p a -> FilePath -> IO ()
-save gist f = TIO.writeFile f $ T.pack (show gist)
--}
 
 
 
@@ -166,7 +156,7 @@ save gist f = TIO.writeFile f $ T.pack (show gist)
 -- two smaller nodes which are then added to the parent
 insertAndSplit :: Predicates p  => NodeEntry GiST p a -> (Int,Int) -> LeafEntry p a -> Either (Seq (NodeEntry GiST p a))  (NodeEntry GiST p a)
 insertAndSplit (Node es,p) (min,max) (toIns,pred)
-            |length newEs <= max  =  Right (Node newEs,union $ fmap treePred newEs)
+            |length newEs <= max  =  Right (Node newEs, merge  (Right pred ) (Left p) )
             |otherwise = Left $ first (Node .fmap unNodeEntry) <$> splitS
                 -- The new entries after insert
         where   newEs = case insertSubtree of
@@ -181,7 +171,7 @@ insertAndSplit (Node es,p) (min,max) (toIns,pred)
 
 insertAndSplit (Leaf es,p) (min,max) (toIns,pred)
             |not $ null $ search pred (Leaf es) = Right ( Leaf (fmap (\(i,j) -> if consistent (Right j) (Right pred) then (toIns ,j) else  (i,j) )es),p)
-            |length newEs <= max  = Right (Leaf newEs,union $ fmap (Right .snd) newEs)
+            |length newEs <= max  = Right (Leaf newEs,merge (Right pred) (Left p) )
             |otherwise = Left $ first (Leaf .fmap unLeafEntry ) <$> splitS
             -- The optimal subtree to insert into
     where   newEs = ((toIns,pred) :< es)
