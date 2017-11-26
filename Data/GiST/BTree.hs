@@ -26,6 +26,7 @@ module Data.GiST.BTree (
 ) where
 
 import Data.GiST.GiST
+import Data.GiST.Types
 import Data.List(sort,sortBy)
 import qualified Data.List as L
 import Data.Monoid
@@ -44,52 +45,58 @@ data Predicate a = Contains (a,a)                   -- ^ containment predicate (
 
 
 
+instance Monoid (Node Int) where
+  mempty = Range (maxBound,minBound)
+  mappend (Range (a,b))  (Range (c,d)) = Range (min a c, max b d)
+
 -- | More documentation on the instance implementation in the source
 instance Predicates Int where
     type Penalty Int = Int
     type Query Int = Predicate Int
-    type Node Int = (Int,Int)
+    data Node Int = Range (Int,Int) deriving (Eq,Ord,Show)
 
     -- | Two containment predicates are consistent if the intervals they represent overlap
     -- A containment and equality predicate are consistent if the interval represented by the former contains the value of the latter
     -- Two equality predicates are consistent if they represent the same value
     -- consistent  i j | traceShow (i,j) False = undefined
-    consistent (Left (min1,max1)) (Left (min2,max2) ) = (min1 <= max2) && (max1 >= min2)
-    consistent (Right  a) (Left (min,max)) = between a min max
-    consistent  (Left (min,max)) (Right  a)= between a min max
+    consistent (Left (Range (min1,max1))) (Left (Range (min2,max2)) ) = (min1 <= max2) && (max1 >= min2)
+    consistent (Right  a) (Left (Range (min,max))) = between a min max
+    consistent (Left (Range (min,max))) (Right  a)= between a min max
     consistent (Right a1) (Right a2)  = a1 == a2
     match (Equals i)  j = consistent (Right i) j
-    match (Contains i)  j = consistent (Left i) j
+    match (Contains i)  j = consistent (Left (Range i)) j
 
     -- | A union of predicates is an interval spanning from the minimal
     -- to the maximal value of all the predicats
-    bound i  = (i,i)
-    merge (Right i ) (Right j) = (min i j ,max i j)
-    merge (Left (a,b) ) (Left (c,d)) = (min a c, max b d)
-    merge (Right a ) (Left (c,d)) = (min a c, max a d)
-    merge  (Left (c,d)) (Right a )= (min a c, max a d)
+    bound i  =  Range (i,i)
 
-    pickSplit es = S.fromList [(l,union (entryPredicate <$> l) ),(j,union (entryPredicate <$> j))]
+    origin  = mempty
+    merge = mappend
+
+    pickSplit (Node pn es) = (pn , S.fromList [Node pl l , Node pj j ])
         where
+          pl = union (nodePredicate <$> l)
+          pj = union (nodePredicate <$> j)
           (l,j)  = S.splitAt ((length es + 1) `div` 2) sorted
-          sorted  = S.sortBy (comparing entryPredicate) es
+          sorted  = S.sortBy (comparing nodePredicate) es
+    pickSplit (Leaf pn es )= (pn, S.fromList [Leaf pl l , Leaf pj j])
+      where
+        pl = union (leafNode <$> l)
+        pj = union (leafNode <$> j)
+        (l,j)  = S.splitAt ((length es + 1) `div` 2) sorted
+        sorted  = S.sortBy (comparing leafPred) es
 
     -- | The distance between the intervals (or values) of the predicates
     penalty p1 p2 = max 0 ((minP p2)-(minP p1)) + max 0 ((maxP p1)-(maxP p2))
 
 -- The lower limit of the predicate
-minP :: Either (a,a) a -> a
-minP (Left (min,_)) = min
-minP (Right a) = a
+minP :: (Node Int) -> Int
+minP (Range (min,_)) = min
 
 -- The upper limit of the predicate
-maxP :: Either (a,a) a -> a
-maxP (Left (_,max)) = max
-maxP (Right a) = a
+maxP :: (Node Int) -> Int
+maxP (Range (_,max)) = max
 
-pattern Empty   <- (S.viewl -> S.EmptyL)  where Empty = S.empty
-pattern x :< xs <- (S.viewl -> x S.:< xs) where (:<)  = (S.<|)
-pattern xs :> x <- (S.viewr -> xs S.:> x) where (:>)  = (S.|>)
 
 -- | Tests if a value is between two others
 between :: Ord a => a -> a -> a -> Bool

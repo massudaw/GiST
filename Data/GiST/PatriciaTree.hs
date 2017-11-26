@@ -7,6 +7,7 @@ import Data.Either (isRight,isLeft)
 import Data.Monoid
 import Data.Ord
 import Control.Applicative hiding (empty)
+import Algebra.Lattice
 import Data.List (intercalate,sort)
 import qualified Data.List as L
 import Data.Maybe
@@ -23,6 +24,11 @@ import qualified Data.Sequence as Seq
 ---------------------
 -- List Predicate  --
 ---------------------
+
+
+instance (Show a ,Ord a) => MeetSemiLattice (Node [a] )where
+  meet (Common i) j =  either (const (Common [])) Common $ splitPrefix i j
+
 
 instance (Show a,Ord a )=>  Predicates [a] where
   data Node [a]
@@ -107,7 +113,7 @@ addDeleteList :: [[Int]] -> Bool
 addDeleteList l = foldl delete (foldl (\g -> uncurry (insertSplit conf g)) empty (zip l [0..])) (reverse l) == (empty :: GiST [Int] Int)
 
 addSearch :: [[String]] -> Bool
-addSearch l = all (\(i,v) -> [v] == searchKey i (foldl (\g -> uncurry (insertSplit conf g)) empty (zip l [(0::Int)..]))) (L.nubBy (\i j -> fst i == fst j) $ reverse $ zip l [(0::Int) ..])
+addSearch l = all (\(i,v) -> [v] == search i (foldl (\g -> uncurry (insertSplit conf g)) empty (zip l [(0::Int)..]))) (L.nubBy (\i j -> fst i == fst j) $ reverse $ zip l [(0::Int) ..])
 
 putScan :: Show a => [a] -> IO ()
 putScan = putStrLn  . unlines . fmap show

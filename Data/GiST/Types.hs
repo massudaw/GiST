@@ -32,6 +32,8 @@ module Data.GiST.Types where
 import Data.Foldable as F
 import Data.Monoid
 import Control.Monad (join)
+import Data.Maybe
+import Debug.Trace
 import Control.DeepSeq
 import Data.Tuple (swap)
 import GHC.Generics
@@ -51,9 +53,8 @@ pattern xs :> x <- (S.viewr -> xs S.:> x) where (:>)  = (S.|>)
 
 
 -- | The data structure used for building the GiST
-data GiST p a  = Leaf !(Seq (LeafEntry p a))       -- ^ leaf node
-               | Node !(Seq (NodeEntry GiST p a))      -- ^ internal node
-               | Null                       -- ^ a null GiST
+data GiST p a  = Node !(Node p) !(Seq (GiST p a))      -- ^ internal node
+               | Leaf !(Node p) !(Seq (LeafEntry p a))       -- ^ leaf node
                deriving (Functor,F.Foldable,T.Traversable,Generic)
 
 
@@ -63,8 +64,8 @@ deriving instance  (Show (Node p ),Show p ,Show a )=>  Show (GiST p a)
 
 
 -- | A general entry type for the gist
-data Entry f p a = LeafEntry !(LeafEntry p a)
-                 | NodeEntry !(NodeEntry f p a)
+data Entry p a = LeafEntry (LeafEntry p a)
+               | NodeEntry (NodeEntry  p a)
 
 
 unLeafEntry  (LeafEntry l) =  l
@@ -72,24 +73,35 @@ unLeafEntry  (LeafEntry l) =  l
 unNodeEntry  (NodeEntry n) =  n
 {-# INLINE unNodeEntry #-}
 
+nodePredicate :: GiST p a -> Node p
+nodePredicate (Leaf p f) =  p
+nodePredicate (Node p f) =  p
+{-# INLINE nodePredicate #-}
+
 -- | Returns the predicate of this entry
-entryPredicate :: Entry f p a -> Either (Node p) p
-entryPredicate (LeafEntry e) = Right $ snd e
-entryPredicate (NodeEntry e) = Left $ snd e
+entryPredicate :: Entry p a -> Node p
+entryPredicate (LeafEntry (_,e,_)) = e
+entryPredicate (NodeEntry (Leaf e _ )) = e
+entryPredicate (NodeEntry (Node e _ )) = e
 {-# INLINE entryPredicate #-}
 
 -- | A leaf entry has a predicate and data
-type LeafEntry p a = (a, p )
+type LeafEntry p a = (a, Node p,p)
 
 -- | A node entry has a predicate and a subtree
-type NodeEntry f p a = (f p a, Node p )
+type NodeEntry  p a = GiST p a
 
+
+nodePred :: GiST p a  -> Node p
+nodePred (Leaf p i) = p
+nodePred (Node p i) = p
+{-# INLINE nodePred #-}
 
 -- | The predicate class that can be instanced by the user to create new types
 -- of balanced search trees
 class (Ord (Penalty p)) => Predicates p where
     type Penalty p
-    type Node p
+    data Node p
     type Query p
     -- | Checks if the given entry is consistent with a given predicate
     consistent  :: Either (Node p) p -> Either (Node p ) p -> Bool
@@ -97,32 +109,51 @@ class (Ord (Penalty p)) => Predicates p where
     match :: Query p -> Either (Node p) p -> Bool
     -- | Returns a predicate that is the union of all predicates of the given list of entries
     bound :: p -> Node p
-    merge :: Either (Node p) p -> Either (Node p) p -> Node p
+    origin :: Node p
+    merge :: Node p  -> Node p -> Node p
 
     -- | Calculates a numerical penalty for inserting the entry containing the first predicate
     -- into a subtree rooted at an entry containing the second predicate
-    penalty  :: Either (Node p) p -> Either (Node p ) p  -> Penalty p
+    penalty  :: Node p -> Node p  -> Penalty p
     -- | Given a list of entries, returns two disjunct subsets that contain the entries in the list.
     -- Focus is on minimising the overlap between the splitted entries' predicates
-    pickSplit :: Seq (Entry f p b) -> Seq (Seq (Entry f p b),Node p)
-    pickSplit l =  S.fromList [swap a,swap b]
-      where (a,b) = pickSplitG l
-    pickSplitN :: Seq (Entry f p b) -> (Node p ,Maybe b ,Seq (Node p,Maybe b,Seq (Entry f p b)))
+    --pickSplitN :: Seq (Entry p b) -> (Node p ,Maybe b ,Seq (Node p,Maybe b,Seq (Entry p b)))
+    pickSplit :: GiST p b -> (Node p ,Seq (GiST p b) ) -- -> (Seq (Seq (Entry  p b),Node p))
+    pickSplit (Node pn l) =  (pn, S.fromList [uncurry Node (fmap unNodeEntry <$>  a),uncurry Node (fmap unNodeEntry <$> b)])
+      where (a,b) = pickSplitG (fmap NodeEntry l)
+    pickSplit (Leaf pn l) =  (pn, S.fromList [uncurry Leaf (fmap unLeafEntry <$>  a),uncurry Leaf (fmap unLeafEntry <$> b)])
+      where (a,b) = pickSplitG (fmap LeafEntry l)
 
-    chooseSubtree  :: Seq (NodeEntry GiST p a) -> p  -> (NodeEntry GiST p a,Int)
+
+
+    chooseSubtree  :: Seq (NodeEntry p a) -> p  -> (NodeEntry p a,Int)
     chooseSubtree = chooseSubtreePenalty
 
-union :: Predicates p => Seq (Either (Node p) p) -> Node p
-union l  = case S.viewl l of
-             i S.:< ps -> F.foldl' (\i l-> merge (Left i) l ) (either id bound i) ps
+union :: Predicates p => Seq (Node p) -> Node p
+union l  = F.foldl' merge origin l
 {-# INLINE union #-}
 
-chooseSubtreePenalty :: Predicates p  =>Seq (NodeEntry GiST p a) -> p  -> (NodeEntry GiST p a,Int)
-chooseSubtreePenalty subtrees e  = fst  $ minimumBy (comparing (\(~(_,p))-> p)) $ penalties
-  where   penalties = S.mapWithIndex (\k ne -> ((ne,k), penalty (Right $ e) (Left $ snd ne)) ) subtrees
+chooseSubtreePenalty :: Predicates p  =>Seq (NodeEntry  p a) -> p  -> (NodeEntry  p a,Int)
+chooseSubtreePenalty subtrees e  = fromMaybe ({-traceShow ("choose(penalty,index,nodep)" , snd minP,snd $ fst minP ,e,nodePredicate (fst $ fst minP)) $-} fst  minP) se
+  where   penalties = S.mapWithIndex (\k ne -> ((ne,k), penalty (bound e) (nodePred ne)) ) subtrees
+          minP =minimumBy (comparing (\(~(_,p))-> p)) $ penalties
+          minS = S.filter ((== snd minP).snd) penalties
+          se = fmap (\i -> (S.index subtrees i, i)) $ S.findIndexL (not . L.null . searchKey e ) subtrees
+
+searchKey  :: Predicates p  => p  -> GiST p a -> [(a, p)]
+searchKey  p (Leaf _ es)     = fmap (\(i,j,k) -> (i,k)) $ F.toList $ S.filter (\(_,n,l)-> consistent (Right p)  (Left n ) && consistent (Right p) (Right l) ) es
+searchKey  p (Node pn es) =
+  concat $ fmap (\e -> if consistent (Right p) (Left $ nodePredicate e)
+                 then searchKey p e  else []) es
+searchKey _ (Node _ Empty) = []
 
 
-greatestPenaltyLinear :: (Predicates f  ) => Seq (Entry g f b) -> (Seq (Entry g f b) , Entry g f b, Entry g f b)
+leafValue (v,_,_) = v
+leafNode (_,n,_) = n
+leafPred (_,_,p) = p
+
+
+greatestPenaltyLinear :: Predicates f  => Seq (Entry  f b) -> (Seq (Entry f b) , Entry f b, Entry f b)
 greatestPenaltyLinear es = (items,e1,e2)
   where m = S.mapWithIndex (\ix1 e1 ->
              let li = deleteAt ix1 es
@@ -134,28 +165,27 @@ greatestPenaltyLinear es = (items,e1,e2)
 
 
 
-
 -- | Implementation of the linear split algorithm taking the minimal fill factor into account
-linearSplit :: (Predicates f  ) => (Node f,Seq (Entry g f b)) -> (Node f,Seq (Entry g f b)) ->
-  Seq (Entry g f b) -> Int -> ((Node f ,Seq (Entry g f b)), (Node f ,Seq (Entry g f b)))
+linearSplit :: (Predicates f  ) => (Node f,Seq (Entry f b)) -> (Node f,Seq (Entry f b)) ->
+  Seq (Entry f b) -> Int -> ((Node f ,Seq (Entry f b)), (Node f ,Seq (Entry f b)))
 linearSplit a1@(p1,es1) a2@(p2,es2) (e:<es) max
-    |length es1 == max  = (a1,(union (Left p2 :< fmap entryPredicate (e:<es)),es2 <> (e:<es)))
-    |length es2 == max  = ((union (Left p1:< fmap entryPredicate (e:<es)),es1 <> (e:<es)), a2 )
-    |otherwise         = if penalty (entryPredicate e) (Left $ p1) >
-                            penalty (entryPredicate e) (Left $ p2)
+    |length es1 == max  = (a1,(union (p2 :< fmap entryPredicate (e:<es)),es2 <> (e:<es)))
+    |length es2 == max  = ((union (p1:< fmap entryPredicate (e:<es)),es1 <> (e:<es)), a2 )
+    |otherwise         = if penalty (entryPredicate e) p1 > penalty (entryPredicate e) p2
                             then linearSplit a1 u2 es max
                             else linearSplit u1 a2 es max
   where
-    u1 = (merge (entryPredicate e ) (Left p1),e:<es1)
-    u2 = (merge (entryPredicate e ) (Left p2),e:<es2)
+    u1 = (merge (entryPredicate e) (p1),e:<es1)
+    u2 = (merge (entryPredicate e) (p2),e:<es2)
 linearSplit es1 es2 Empty _ = (es1,es2)
 {-# INLINE linearSplit#-}
 
 
+
 pickSplitG
   :: (Predicates f ) =>
-    Seq (Entry g f b) -> ((Node f ,Seq (Entry g f b)), (Node f,Seq (Entry g f b)))
-pickSplitG es = linearSplit (either id bound (entryPredicate e1),pure e1) (either id bound (entryPredicate e2),pure e2)  items len
+    Seq (Entry f b) -> ((Node f ,Seq (Entry f b)), (Node f,Seq (Entry f b)))
+pickSplitG es = linearSplit (entryPredicate e1,pure e1) ((entryPredicate e2),pure e2)  items len
         -- A tuple containing the two most disparate entries in the list their corresponding penalty penalty
         where (items, e1, e2) =  greatestPenaltyLinear es
               len = (S.length es + 1) `div` 2
@@ -163,7 +193,8 @@ pickSplitG es = linearSplit (either id bound (entryPredicate e1),pure e1) (eithe
 
 deleteAt ix s = h <> S.drop 1 t
   where (h,t) = S.splitAt ix  s
-        {-
+
+{-
 instance (Show (Node p),Show p) => Show (GiST p a ) where
   show (Node  l ) = "N" ++ " [" ++ L.intercalate "," ( F.toList  $ fmap (\(g,p) ->   show p ++ " -> ("  ++ show g ++ ")") l) ++ "]"
   show (Leaf  l ) =  "L" ++" [" ++ L.intercalate "," (  F.toList  $fmap (\(g,p) ->   show p  ) l) ++ "]"

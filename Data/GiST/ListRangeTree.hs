@@ -47,7 +47,6 @@ instance (Show a,Ord a )=>  Predicates [a] where
         | i == j = first (i :)  $ sp xs ys
         | otherwise = ([] ,(Just (i:xs), Just (j:ys)))
   append (Common i r) (Common j rj) = Common ( i ++ j) rj
-  -- consistent  i j | traceShow (i,j) False = undefined
   consistent (Left (Common i ri )) (Left (Common j rj ) ) = i == j && ri `intersect` rj
   consistent (Right j ) (Left (Common i (rj1,rj2) )) =  i `L.isPrefixOf` j && all id (zipWith3 between (L.drop (L.length i ) j ) rj1 rj2)
   consistent (Left (Common i (rj1,rj2))) (Right j) =  i `L.isPrefixOf` j && all id (zipWith3 between (L.drop (L.length i ) j ) rj1 rj2)
@@ -116,13 +115,13 @@ listitems ::  [[Int]]
 listitems = [[0],[1],[2],[3],[0,1]]
 fullList = scanl (\g -> uncurry (insertSplit conf g)) empty (zip listitems [0..])
 emptyList = scanl delete (last fullList) (listitems) ++ scanl delete (last fullList) (reverse listitems)
-searchList = fmap (\(i,v) -> (i,v,   [v]== searchKey i (last fullList ),   searchKey i (last fullList )) ) (L.nubBy (\i j -> fst i == fst j) $ reverse $ zip listitems [(0::Int) ..])
+searchList = fmap (\(i,v) -> (i,v,   [v]== search i (last fullList ),   search i (last fullList )) ) (L.nubBy (\i j -> fst i == fst j) $ reverse $ zip listitems [(0::Int) ..])
 
 addDeleteList :: [[Int]] -> Bool
 addDeleteList l = foldl delete (foldl (\g -> uncurry (insertSplit conf g)) empty (zip l [0..])) (reverse l) == (empty :: GiST [Int] Int)
 
 addSearch :: [[Int]] -> Bool
-addSearch l = all (\(i,v) -> [v] == searchKey i (foldl (\g -> uncurry (insertSplit conf g)) empty (zip l [(0::Int)..]))) (L.nubBy (\i j -> fst i == fst j) $ reverse $ zip l [(0::Int) ..])
+addSearch l = all (\(i,v) -> [v] == search i (foldl (\g -> uncurry (insertSplit conf g)) empty (zip l [(0::Int)..]))) (L.nubBy (\i j -> fst i == fst j) $ reverse $ zip l [(0::Int) ..])
 
 putScan :: Show a => [a] -> IO ()
 putScan = putStrLn  . unlines . fmap show
